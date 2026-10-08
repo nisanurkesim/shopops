@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Olist data and derived database (CC BY-NC-SA, not committed)
+data/*.db
+# PyCharm settings
+.idea/
