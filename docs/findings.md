@@ -16,3 +16,14 @@ Notes from exploring the Olist data. Used later for rule design, the README and 
 - 20 orders were placed on or after 2018-09-01 and were removed.
 - 19 of them had no order items; canceled orders went from 625 to 606, so they were most likely canceled orders.
 - To verify with a JOIN later.
+
+## 4. One order can have several payment rows
+- payments has 103,866 rows for 99,421 orders.
+- Voucher: 5,756 payment rows across 3,847 distinct orders (about 1.5 voucher rows per order).
+- 2 payments have payment_type `not_defined`.
+- Impact: R12 (voucher refunds) must handle orders paid partly by voucher and partly by another method.
+
+## 5. Review scores by order status
+- delivered: 4.16 average; every non-delivered status is below 2.5; processing is lowest (1.28).
+- created and approved have very few orders, so their averages are not reliable.
+- Impact: the customers who contact support are mostly the least satisfied ones.
