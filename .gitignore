@@ -221,5 +221,8 @@ __marimo__/
 
 # Olist data and derived database (CC BY-NC-SA, not committed)
 data/*.db
+
+data/chroma/
+
 # PyCharm settings
 .idea/
