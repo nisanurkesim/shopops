@@ -80,20 +80,33 @@ pip install -r requirements.txt
 python data/download.py          # Olist'i kagglehub ile indir (Kaggle hesabı gerekmez)
 python scripts/load_sqlite.py    # data/shopops.db'yi oluştur
 python scripts/smoke.py          # satır sayılarını ve temel kuralları kontrol et
+python scripts/build_index.py    # politika arama indeksini oluştur (embedding modeli bir kez indirilir)
 ```
 
 `.env.example` dosyasını `.env` olarak kopyala ve kendi Gemini API anahtarını ekle (ücretsiz katman, [Google AI Studio](https://aistudio.google.com)).
 
+Testleri çalıştırmak için:
+
+```bash
+python -m unittest discover tests -v
+```
+
 ## Repo yapısı
 
 ```
-config.py              ayarlar tek yerde (yollar, SIMULATED_TODAY)
-data/download.py       Olist verisini indirir
-scripts/load_sqlite.py SQLite veritabanını oluşturur
-scripts/smoke.py       veritabanını kontrol eder
-scripts/sql_shell.py   veriyi incelemek için read-only SQL shell
-docs/findings.md       veri incelemesinden notlar
+config.py                    ayarlar tek yerde (yollar, SIMULATED_TODAY)
+data/download.py             Olist verisini indirir
+scripts/load_sqlite.py       SQLite veritabanını oluşturur
+scripts/smoke.py             veritabanını kontrol eder
+scripts/sql_shell.py         veriyi incelemek için read-only SQL shell
+scripts/build_index.py       politika arama indeksini oluşturur
+src/returns.py               iade kural motoru (R0-R13), LLM yok
+src/knowledge/policies.py    politika RAG'i: bölme, embedding, arama
+policies/                    RAG'in kullandığı politika dokümanları (Türkçe)
+tests/                       kural motoru ve RAG için unit testler
+docs/findings.md             veri incelemesinden notlar
 ```
+
 ## Teşekkürler
 
 AI Agents Bootcamp (Türkiye Veri Topluluğu × MultiGroup, 2026) final projesi olarak geliştirildi. Senaryo, personalar ve iş kuralları bootcamp'in proje belgesinden alındı.
