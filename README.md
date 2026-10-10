@@ -81,20 +81,33 @@ pip install -r requirements.txt
 python data/download.py          # download Olist via kagglehub (no Kaggle account needed)
 python scripts/load_sqlite.py    # build data/shopops.db
 python scripts/smoke.py          # check row counts and basic rules
+python scripts/build_index.py    # build the policy search index (downloads the embedding model once)
 ```
 
 Copy `.env.example` to `.env` and add your own Gemini API key (free tier, [Google AI Studio](https://aistudio.google.com)).
 
+Run the tests:
+
+```bash
+python -m unittest discover tests -v
+```
+
 ## Repository structure
 
 ```
-config.py              settings in one place (paths, SIMULATED_TODAY)
-data/download.py       downloads the Olist dataset
-scripts/load_sqlite.py builds the SQLite database
-scripts/smoke.py       checks the database
-scripts/sql_shell.py   read-only SQL shell for exploring the data
-docs/findings.md       notes from data exploration
+config.py                    settings in one place (paths, SIMULATED_TODAY)
+data/download.py             downloads the Olist dataset
+scripts/load_sqlite.py       builds the SQLite database
+scripts/smoke.py             checks the database
+scripts/sql_shell.py         read-only SQL shell for exploring the data
+scripts/build_index.py       builds the policy search index
+src/returns.py               return rule engine (R0-R13), no LLM
+src/knowledge/policies.py    policy RAG: splitting, embedding, search
+policies/                    policy documents (Turkish) used by RAG
+tests/                       unit tests for the rule engine and RAG
+docs/findings.md             notes from data exploration
 ```
+
 ## Acknowledgements
 
 Built as the final project of the AI Agents Bootcamp (Türkiye Veri Topluluğu × MultiGroup, 2026). The scenario, personas and business rules come from the bootcamp's project brief.
