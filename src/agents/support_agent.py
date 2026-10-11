@@ -138,7 +138,7 @@ class SupportAgent:
                     model=self.model, contents=self.history, config=self.config)
             except errors.APIError as e:
                 self.last_error = f"{e.code}: {e.message}"
-                retryable = isinstance(e, errors.ServerError) or e.code == 429
+                retryable = isinstance(e, errors.ServerError)   # 429 means the quota is used up
                 if not retryable or attempt == MAX_API_RETRIES:
                     return None
                 time.sleep(5 * (attempt + 1))   # wait 5 s, then 10 s
