@@ -14,4 +14,4 @@ OLIST_DATASET = "olistbr/brazilian-ecommerce"
 SIMULATED_TODAY = "2018-09-01"
 
 # LLM used by the agents (free tier on Google AI Studio)
-GEMINI_MODEL = "gemini-3.8-flash"
+GEMINI_MODEL = "gemini-3.5-flash-lite"
