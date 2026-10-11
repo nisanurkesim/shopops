@@ -12,3 +12,6 @@ OLIST_DATASET = "olistbr/brazilian-ecommerce"
 
 # The dataset ends in 2018, so "today" is fixed for every date calculation
 SIMULATED_TODAY = "2018-09-01"
+
+# LLM used by the agents (free tier on Google AI Studio)
+GEMINI_MODEL = "gemini-3.8-flash"

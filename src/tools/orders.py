@@ -16,6 +16,7 @@ from src.returns import (
 # Same message whether the order does not exist or belongs to someone else (R1)
 NOT_FOUND_MESSAGE = "Bu numarayla size ait bir sipariş bulunamadı."
 MAX_LIST_LIMIT = 20
+CURRENCY = "BRL"   # Olist prices are in Brazilian real
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,7 @@ def get_order_status(session: Session, order_id: str, db_path: Path = DB_PATH) -
         "item_count": len(facts.items),
         "items_total": round(sum(i.price for i in facts.items), 2),
         "freight_total": round(sum(i.freight_value for i in facts.items), 2),
+        "currency": CURRENCY,
     }
 
 
@@ -167,7 +169,7 @@ def list_customer_orders(session: Session, limit: int = 5, status: str | None = 
             "item_count": r["item_count"],
             "items_total": round(r["items_total"], 2),
         })
-    return {"orders": orders[:limit], "total_orders": len(orders)}
+    return {"orders": orders[:limit], "total_orders": len(orders), "currency": CURRENCY}
 
 
 def check_return_eligibility(session: Session, order_id: str, reason: str,
@@ -181,4 +183,4 @@ def check_return_eligibility(session: Session, order_id: str, reason: str,
         return {"error": "INVALID_REASON", "message": str(e)}
     if decision.code == NOT_FOUND:
         return not_found()   # do not reveal whether it was R0 or R1
-    return {"order_id": order_id, "reason": reason, **asdict(decision)}
+    return {"order_id": order_id, "reason": reason, **asdict(decision), "currency": CURRENCY}
