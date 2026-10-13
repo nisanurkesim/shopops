@@ -73,7 +73,27 @@ TOOL_DECLARATIONS = [
             "required": ["query"],
         },
     ),
+    types.FunctionDeclaration(
+        name="create_return_request",
+        description=(
+            "Prepare a return request for one of the customer's orders. It does NOT create the "
+            "request: the customer must confirm it in the interface. Use it only when the customer "
+            "asks to open a return and check_return_eligibility showed a refund for that reason."
+        ),
+        parameters_json_schema={
+            "type": "object",
+            "properties": {
+                "order_id": {"type": "string", "description": "The 32-character order id."},
+                "reason": {"type": "string", "enum": sorted(VALID_REASONS),
+                           "description": "The same reason used in check_return_eligibility."},
+            },
+            "required": ["order_id", "reason"],
+        },
+    ),
 ]
+
+# Tools that change data. The agent runs these itself, behind customer approval (G1).
+WRITE_TOOLS = {"create_return_request"}
 
 
 def execute_tool(session: Session, name: str, args: dict) -> dict:
@@ -91,6 +111,8 @@ def execute_tool(session: Session, name: str, args: dict) -> dict:
                 {"title": h["title"], "section": h["section"], "text": h["text"], "score": h["score"]}
                 for h in hits
             ]}
+        if name in WRITE_TOOLS:   # never run here: the agent handles approval
+            return {"error": "APPROVAL_REQUIRED", "message": "This tool needs customer approval."}
         return {"error": "UNKNOWN_TOOL", "message": f"There is no tool called '{name}'."}
     except KeyError as e:
         return {"error": "MISSING_ARGUMENT", "message": f"Missing argument: {e}"}
