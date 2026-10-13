@@ -38,3 +38,15 @@ Used later for the README and the blog post.
 - What happened: S7 showed "(ALREADY_CLOSED)" and did not say that the order was canceled. S8 showed "(freight refund)".
 - Cause: the tool results use English codes and field names, and the prompt does not say to keep them out of the answer.
 - Possible fix: a Turkish description next to each code in the tool result (as done for the approval summary in `scripts/chat.py`), and a prompt rule not to show codes.
+
+## 7. After a declined approval the agent points to a summary that is not on screen
+- What happened: in the CLI demo the approval question got an empty answer, so the request was not created (as designed). The customer then sent the same request again. The agent called no tool and said "please confirm the request on the screen", but there was no summary on screen anymore. Typing "e" into the chat did nothing, because approval only comes from the approval prompt.
+- Cause: the interface note after a decline only says that nothing was created. The model sees from the history that it already prepared a request and does not prepare a new one.
+- Fix: the note after a decline should say that the summary is gone and that `create_return_request` must be called again if the customer still wants the return.
+- Good side: a "yes" typed into the chat cannot approve anything (G1).
+
+## 8. Long turns: the Gemini SDK retries on its own
+- What happened: in the final run and in the CLI demo some turns took 3-5 minutes with normal token counts.
+- Clue: a traceback after Ctrl + C showed `tenacity` and `_retry` inside `google.genai`, so the SDK retries failed requests itself, before our own retry in `SupportAgent._generate` sees an error.
+- Impact: the latency in `eval/results/agent.csv` includes these hidden waits and is not the agent's real speed.
+- Next step: check the SDK retry settings and log which error is retried.
