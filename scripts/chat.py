@@ -7,6 +7,7 @@ from pathlib import Path
 # Let this script import config.py and src/ from the project root
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from src.agents.support_agent import SupportAgent
+from src.agents.trace import LOG_PATH
 from src.tools.orders import Session
 
 # Demo customer with 17 orders (the logged-in user of this session)
@@ -28,8 +29,9 @@ def short(result: dict, limit: int = 150) -> str:
 
 def main():
     customer = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_CUSTOMER
-    agent = SupportAgent(Session(customer))
-    print(f"Logged in as customer {customer[:8]}...  Type 'exit' to quit.\n")
+    agent = SupportAgent(Session(customer), log_path=LOG_PATH)
+    print(f"Logged in as customer {customer[:8]}...  Type 'exit' to quit.")
+    print(f"Log: {LOG_PATH}\n")
 
     while True:
         try:
