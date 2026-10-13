@@ -223,6 +223,7 @@ __marimo__/
 data/*.db
 
 data/chroma/
+logs/
 
 # PyCharm settings
 .idea/

@@ -3,6 +3,7 @@ import json
 import os
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from dotenv import load_dotenv
 from google import genai
@@ -10,6 +11,7 @@ from google.genai import errors, types
 
 from config import GEMINI_MODEL, PROJECT_ROOT, SIMULATED_TODAY
 from src.agents.support_tools import TOOL_DECLARATIONS, execute_tool
+from src.agents.trace import hash_id, outcome, write_event
 from src.tools.orders import Session
 from src.tools.return_requests import PendingReturn, create_return_request, prepare_return_request
 
@@ -54,6 +56,7 @@ class AgentReply:
     input_tokens: int = 0
     output_tokens: int = 0
     stop_reason: str = "answer"   # answer | max_steps | api_error
+    latency_s: float = 0.0
 
 
 def make_client() -> genai.Client:
@@ -67,8 +70,10 @@ def make_client() -> genai.Client:
 class SupportAgent:
     """One customer conversation. Keeps the history between messages."""
 
-    def __init__(self, session: Session, client=None, model: str = GEMINI_MODEL):
+    def __init__(self, session: Session, client=None, model: str = GEMINI_MODEL,
+                 log_path: Path | None = None):
         self.session = session
+        self.log_path = log_path   # None: no log (used by the tests)
         self.model = model
         self.client = client or make_client()
         self.history: list[types.Content] = []
@@ -83,6 +88,23 @@ class SupportAgent:
         )
 
     def ask(self, message: str) -> AgentReply:
+        """Answer one customer message, then write the turn to the log."""
+        start_time = time.perf_counter()
+        reply = self._run_turn(message)
+        reply.latency_s = round(time.perf_counter() - start_time, 2)
+        self._log("turn", {
+            "model": self.model,
+            "message": message,
+            "reply": reply.text,
+            "steps": [{"tool": s.tool, "args": s.args, "outcome": outcome(s.result)} for s in reply.steps],
+            "input_tokens": reply.input_tokens,
+            "output_tokens": reply.output_tokens,
+            "latency_s": reply.latency_s,
+            "stop_reason": reply.stop_reason,
+        })
+        return reply
+
+    def _run_turn(self, message: str) -> AgentReply:
         reply = AgentReply()
         start = len(self.history)
         self.pending = None   # an approval only counts right after its summary was shown
@@ -154,6 +176,15 @@ class SupportAgent:
 
     def confirm_return(self, approved: bool) -> dict:
         """Called by the interface with the customer's answer, never by the LLM."""
+        pending = self.pending
+        result = self._confirm(approved)
+        if pending is not None:
+            self._log("approval", {"order_id": pending.order_id, "approved": approved,
+                                   "outcome": outcome(result),
+                                   "return_request_id": result.get("return_request_id")})
+        return result
+
+    def _confirm(self, approved: bool) -> dict:
         pending, self.pending = self.pending, None
         if pending is None:
             return {"error": "NO_PENDING_REQUEST"}
@@ -171,6 +202,11 @@ class SupportAgent:
             self.interface_note = (f"[Interface note] The return request for order "
                                    f"{pending.order_id} could not be created: {result.get('error')}.")
         return result
+
+    def _log(self, event: str, data: dict):
+        if self.log_path is not None:
+            write_event(self.log_path, {"event": event,
+                                        "session": "#" + hash_id(self.session.customer_unique_id), **data})
 
     def _generate(self):
         """Call Gemini. Retry when it is busy (503). Returns None on failure."""
