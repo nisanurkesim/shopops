@@ -12,6 +12,14 @@ from src.tools.orders import Session
 # Demo customer with 17 orders (the logged-in user of this session)
 DEFAULT_CUSTOMER = "8d50f5eadf50201ccdcedfb9e2ac8455"
 
+# What the customer sees in the approval summary instead of the reason codes
+REASON_LABELS = {
+    "changed_mind": "Fikir değiştirme",
+    "damaged": "Hasarlı ürün",
+    "wrong_item": "Yanlış ürün",
+    "late": "Geç teslimat",
+}
+
 
 def short(result: dict, limit: int = 150) -> str:
     text = json.dumps(result, ensure_ascii=False)
@@ -51,7 +59,7 @@ def ask_for_approval(agent: SupportAgent):
     s = agent.pending.summary()
     level = "kıdemli temsilci onayı" if s["approval_level"] == "PENDING_SENIOR" else "temsilci onayı"
     print("\n  --- İade talebi özeti ---")
-    print(f"  Sipariş: {s['order_id'][:8]}   Sebep: {s['reason']}")
+    print(f"  Sipariş: {s['order_id'][:8]}   Sebep: {REASON_LABELS.get(s['reason'], s['reason'])}")
     print(f"  İade tutarı: {s['refund_amount']:.2f} {s['currency']}   Sonraki adım: {level}")
     try:
         answer = input("  Bu talebi oluşturmayı onaylıyor musunuz? [e/h]: ").strip().lower()

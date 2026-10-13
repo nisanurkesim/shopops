@@ -27,3 +27,21 @@ Notes from exploring the Olist data. Used later for rule design, the README and 
 - delivered: 4.16 average; every non-delivered status is below 2.5; processing is lowest (1.28).
 - created and approved have very few orders, so their averages are not reliable.
 - Impact: the customers who contact support are mostly the least satisfied ones.
+
+## 6. A prompt rule did not stop the LLM from changing the return reason
+
+During the HITL test the customer first asked for a return because the item arrived
+broken (`damaged`), declined the summary, then wrote "Fikrimi değiştirdim, talebi
+açalım" (meaning: I changed my mind about declining). The LLM read this as the
+return reason and prepared a new request with `changed_mind`. The refund dropped
+from 96.40 BRL to 72.90 BRL, because freight is not refunded for `changed_mind`.
+
+Fix attempt: one sentence in rule 4 of the system prompt (keep the reason given
+earlier, ask if the reason seems to change). Run again with another order: the LLM
+did the same (38.66 BRL to 23.40 BRL). The prompt rule had no effect in this test.
+
+What actually protects the customer is the approval summary, which comes from the
+code, not from the LLM. The reason is now shown in Turkish ("Hasarlı ürün",
+"Fikir değiştirme") so a changed reason is easy to see before pressing "e".
+Possible code fix: warn in the summary when the reason differs from a request the
+customer declined for the same order.
