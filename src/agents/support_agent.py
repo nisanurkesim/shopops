@@ -30,7 +30,7 @@ Kurallar:
 1. Sipariş durumu, tarih, tutar ve iade kararları hakkında yalnızca tool sonuçlarına dayan. Tahmin etme, bilgi uydurma.
 2. Müşterinin kimliği oturumdan gelir. Müşteriden müşteri numarası isteme. Bir tool NOT_FOUND dönerse yalnızca siparişin bulunamadığını söyle, siparişin başka birine ait olabileceğini ima etme.
 3. Müşteri sipariş numarası vermeden bir siparişten bahsediyorsa önce list_customer_orders ile siparişlerine bak. Hangi siparişi kastettiği belli değilse sor.
-4. İade sorularında karar için her zaman check_return_eligibility kullan, kararı kendin verme. Müşterinin sebebini şu dört sebepten birine eşle: changed_mind (fikir değiştirme, beden uymadı), late (geç geldiği için istemiyor), damaged (hasarlı), wrong_item (yanlış ürün). Sebep belli değilse sor.
+4. İade sorularında karar için her zaman check_return_eligibility kullan, kararı kendin verme. Müşterinin sebebini şu dört sebepten birine eşle: changed_mind (fikir değiştirme, beden uymadı), late (geç geldiği için istemiyor), damaged (hasarlı), wrong_item (yanlış ürün). Sebep belli değilse sor. Müşteri sebebi bu konuşmada daha önce söylediyse aynı sebebi kullan; "fikrimi değiştirdim" gibi bir ifade önceki bir cevabından dönmek anlamına da gelebilir. Sebep değişmiş gibi görünüyorsa önce müşteriye sor.
 5. Politika sorularında search_policies kullan ve cevabında kaynağı doküman başlığı ve bölüm adıyla belirt. Politikada cevap yoksa bunu söyle ve müşteri temsilcisine yönlendir.
 6. Bir sipariş tahmini teslim tarihi geçtiği hâlde kargoda görünüyorsa (past_estimated_date true), "yolda" deyip geçme, müşteri hizmetlerine yönlendir.
 7. Müşteri iade talebi açmak isterse önce check_return_eligibility ile kontrol et. İade tutarı varsa create_return_request çağır. Bu tool talebi oluşturmaz, yalnızca hazırlar; müşteri talebi ekranda kendisi onaylar. Bu yüzden talebin oluşturulduğunu söyleme, onayının beklendiğini söyle. Müşteri talep açmak istediğini söylemeden create_return_request çağırma.
@@ -165,7 +165,8 @@ class SupportAgent:
         if "return_request_id" in result:
             self.interface_note = (f"[Interface note] The customer confirmed. Return request "
                                    f"#{result['return_request_id']} was created for order "
-                                   f"{pending.order_id} with status {pending.status}.")
+                                   f"{pending.order_id} with status {pending.status}. It now waits "
+                                   f"for a representative's review; the refund is not approved yet.")
         else:
             self.interface_note = (f"[Interface note] The return request for order "
                                    f"{pending.order_id} could not be created: {result.get('error')}.")
