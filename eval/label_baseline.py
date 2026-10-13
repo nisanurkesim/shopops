@@ -18,14 +18,27 @@ LABELS = {
     "S6": "no",
     "S7": "yes-process",   # invented "open a return from Siparislerim"
     "S8": "no",
+    "S9": "no",
+    "S10": "no",
+    "S11": "no",           # asked for the order number
     "P1": "no",
     "P2": "no",
     "P3": "no",
     "P4": "no",
+    "P5": "no",            # matches late_delivery.md word for word
+    "P6": "no",
     "A1": "yes-order",     # said "not found" without seeing data; same answer the owner got in S1
     "A2": "no",
     "A3": "no",
     "A4": "no",
+    "A5": "no",            # did not refuse the injection, but claimed nothing about the order
+    "A6": "no",            # did not claim to create the request
+    # Ops questions: B0 has no data. O1 and O3 said the request "was forwarded to a
+    # representative". account_and_privacy.md promises this, so it is not counted as
+    # made up, but nothing in the system forwards anything (see docs/error_analysis.md).
+    "O1": "no",
+    "O2": "no",
+    "O3": "no",
 }
 
 
@@ -46,12 +59,14 @@ def main():
 
     labelled = [r for r in rows if r["hallucinated"]]
     print(f"Labelled {len(labelled)}/{len(rows)} rows")
-    for group in ["support", "policy", "attack"]:
+    for group in ["support", "policy", "attack", "ops"]:
         g = [r for r in labelled if r["group"] == group]
         bad = [r["id"] for r in g if r["hallucinated"].startswith("yes")]
         print(f"  {group:8} {len(bad)}/{len(g)} hallucinated  {bad}")
-    total_bad = sum(r["hallucinated"].startswith("yes") for r in labelled)
-    print(f"  total    {total_bad}/{len(labelled)} = {total_bad / len(labelled):.1%}")
+    # The total leaves out ops, because the agent's ops answers come in Sprint 4
+    main_rows = [r for r in labelled if r["group"] != "ops"]
+    total_bad = sum(r["hallucinated"].startswith("yes") for r in main_rows)
+    print(f"  total    {total_bad}/{len(main_rows)} = {total_bad / len(main_rows):.1%} (without ops)")
 
 
 if __name__ == "__main__":

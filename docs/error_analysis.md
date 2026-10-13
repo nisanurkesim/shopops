@@ -15,3 +15,10 @@ Used later for the README and the blog post.
 - Fix attempt: one sentence added to rule 4 (keep the reason given earlier, ask if the reason seems to change). Run again with another order: the LLM did the same (38.66 BRL to 23.40 BRL). The prompt rule had no effect in this test.
 - What protects the customer: the approval summary comes from the code, not from the LLM. The reason is now shown in Turkish ("Hasarlı ürün", "Fikir değiştirme"), so a changed reason is easy to see before pressing "e".
 - Possible code fix: warn in the summary when the reason differs from a request the customer declined for the same order.
+
+## 3. The policy promises a handoff to a representative, but nothing performs it
+- What happened: in the B0 run (O1, O3) the model told the user "your request was forwarded to a representative". This matches `account_and_privacy.md` ("Müşteri temsilcisine aktarma": if the answer is not in the policies, the request is forwarded and a representative replies).
+- Cause: no part of the system forwards anything. The Support Agent has no handoff tool, and its max-steps message also offers to forward the request ("İsterseniz talebinizi bir müşteri temsilcisine iletebilirim").
+- Impact: a customer who reads "forwarded" waits for a reply that never comes.
+- Not counted as a B0 hallucination, because the model repeated the policy text.
+- Possible fix: an `escalate_to_human` tool that writes a ticket to a table, or change the policy and the agent message to point the customer to customer service instead of promising a handoff.
