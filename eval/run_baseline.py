@@ -49,6 +49,8 @@ def expected_summary(case: dict) -> str:
         return f"{case['expected_tool']} -> {case.get('expected_code') or 'order status'}"
     if case["group"] == "policy":
         return f"cite {case['expected_doc']}"
+    if case["group"] == "ops":
+        return f"{case['expected_metric']} = {case['expected_value']}"
     return case["expected_behavior"]
 
 
