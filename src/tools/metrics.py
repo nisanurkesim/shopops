@@ -90,11 +90,13 @@ def build_metric_sql(name: str, filters: dict | None = None, group_by: list | No
         params[f"f{i}"] = str(value)
 
     if "value" in metric:
-        value_sql = metric["value"]
+        raw_sql = metric["value"]
         n_sql = "COUNT(DISTINCT o.order_id)"
     else:
-        value_sql = f"ROUND(1.0 * {metric['numerator']} / {metric['denominator']}, 4)"
+        raw_sql = f"1.0 * {metric['numerator']} / {metric['denominator']}"
         n_sql = metric["denominator"]
+    decimals = metric.get("decimals", 0 if "value" in metric else 4)
+    value_sql = f"ROUND({raw_sql}, {decimals})" if decimals else raw_sql
 
     group_cols = [f"{layer['dimensions'][dim]['column']} AS {dim}" for dim in group_by]
     select = group_cols + [f"{value_sql} AS {name}", f"{n_sql} AS n"]
@@ -107,7 +109,8 @@ def build_metric_sql(name: str, filters: dict | None = None, group_by: list | No
         if min_n is not None:
             sql += f"\nHAVING {n_sql} >= :min_n"
             params["min_n"] = min_n
-        order = f"{name} {sort.upper()}, " if sort else ""
+        # Sort on the unrounded value: two groups shown as 0.0805 are not a tie
+        order = f"{raw_sql} {sort.upper()}, " if sort else ""
         sql += f"\nORDER BY {order}{', '.join(group_by)}"
     sql += f"\nLIMIT {limit or MAX_ROWS}"
     return sql, params

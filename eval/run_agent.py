@@ -78,7 +78,8 @@ def expected_summary(case: dict) -> str:
     if case["group"] == "policy":
         return f"cite {case['expected_doc']}"
     if case["group"] == "ops":
-        return f"{case['expected_metric']} = {case['expected_value']}"
+        rows = case["expected_rows"]
+        return f"{case['expected_metric'] or 'run_sql'}: {rows[0]}" + (f" (+{len(rows) - 1} rows)" if len(rows) > 1 else "")
     return ""
 
 

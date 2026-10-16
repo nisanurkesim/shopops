@@ -5,6 +5,7 @@
 # grain: order -> one row per order (FROM orders o)
 #        item  -> one row per order item (FROM order_items oi JOIN orders o)
 # value:        SQL for count, sum and average metrics
+# decimals:     rounding of the shown value (ratios: 4). Sorting uses the unrounded value.
 # numerator /
 # denominator:  SQL for ratio metrics
 # :simulated_today is bound to SIMULATED_TODAY from config.py on every query.
@@ -61,7 +62,8 @@ metrics:
     description: "Ciro hacmi (GMV): ürün fiyatlarının toplamı, BRL. İptal ve temin edilemeyen siparişler hariç, kargo dahil değil"
     grain: item
     base_filter: "o.order_status NOT IN ('canceled', 'unavailable')"
-    value: "ROUND(SUM(oi.price), 2)"
+    value: "SUM(oi.price)"
+    decimals: 2
     dimensions: [customer_state, purchase_month, product_category_en, seller_state]
     caveat: "GMV ciro hacmidir; gelir, katkı ya da net kâr değildir. Ödeme tutarlarının toplamı GMV değildir (kargo ve taksit içerir)."
 
@@ -69,7 +71,8 @@ metrics:
     description: "Ortalama sepet tutarı: GMV / sipariş sayısı, BRL (aynı filtrelerle)"
     grain: item
     base_filter: "o.order_status NOT IN ('canceled', 'unavailable')"
-    value: "ROUND(SUM(oi.price) / COUNT(DISTINCT o.order_id), 2)"
+    value: "SUM(oi.price) / COUNT(DISTINCT o.order_id)"
+    decimals: 2
     dimensions: [customer_state, purchase_month, product_category_en, seller_state]
     caveat: "Kategoriye göre bakıldığında yalnız o kategorideki ürünlerin tutarı sayılır. GMV gelir değildir."
 
@@ -99,7 +102,8 @@ metrics:
     base_filter: >-
       o.order_status = 'delivered' AND o.order_delivered_customer_date IS NOT NULL
       AND DATE(o.order_delivered_customer_date) <= DATE(:simulated_today)
-    value: "ROUND(AVG(julianday(o.order_delivered_customer_date) - julianday(o.order_purchase_timestamp)), 3)"
+    value: "AVG(julianday(o.order_delivered_customer_date) - julianday(o.order_purchase_timestamp))"
+    decimals: 3
     dimensions: [customer_state, purchase_month, product_category_en, seller_state]
     caveat: "Saatler dahil hesaplanır (brief tanımı); yalnız günlerle hesaplanırsa biraz daha kısa çıkar. Gözlemseldir."
 
@@ -108,7 +112,8 @@ metrics:
     grain: order
     base_filter: "1 = 1"
     join: "JOIN (SELECT order_id, AVG(review_score) AS score FROM reviews GROUP BY order_id) AS r ON r.order_id = o.order_id"
-    value: "ROUND(AVG(r.score), 3)"
+    value: "AVG(r.score)"
+    decimals: 3
     dimensions: [customer_state, purchase_month, product_category_en, seller_state]
     caveat: "Yalnız yorumu olan siparişler. Birden fazla yorumu olan siparişin puanı ortalanır. Gözlemseldir; nedensellik değildir."
 
