@@ -1,0 +1,125 @@
+# Semantic layer for the Ops Data Agent (brief section 5.4)
+# Every metric is defined once here. run_metric (src/tools/metrics.py) builds the SQL
+# from these parts, so the agent never invents what "late" or "GMV" means.
+#
+# grain: order -> one row per order (FROM orders o)
+#        item  -> one row per order item (FROM order_items oi JOIN orders o)
+# value:        SQL for count, sum and average metrics
+# numerator /
+# denominator:  SQL for ratio metrics
+# :simulated_today is bound to SIMULATED_TODAY from config.py on every query.
+# Dates are compared as calendar days with DATE(), as in the rule engine.
+
+dimensions:
+  customer_state:
+    description: "Müşterinin eyaleti (örnek: SP, RJ)"
+    column: c.customer_state
+    join: "JOIN customers AS c ON c.customer_id = o.customer_id"
+  purchase_month:
+    description: "Sipariş ayı, YYYY-MM (örnek: 2018-07)"
+    column: "strftime('%Y-%m', o.order_purchase_timestamp)"
+    join: ""
+  product_category_en:
+    description: "Ürün kategorisi, İngilizce (örnek: furniture_decor)"
+    column: cat.product_category_en
+    # An order with items from two categories counts once in each (distinct order-category pairs)
+    join:
+      order: >-
+        JOIN (SELECT DISTINCT oi2.order_id,
+                     COALESCE(t2.product_category_name_english, p2.product_category_name, 'unknown') AS product_category_en
+              FROM order_items AS oi2
+              JOIN products AS p2 ON p2.product_id = oi2.product_id
+              LEFT JOIN category_translation AS t2 ON t2.product_category_name = p2.product_category_name) AS cat
+          ON cat.order_id = o.order_id
+      item: >-
+        JOIN (SELECT p2.product_id,
+                     COALESCE(t2.product_category_name_english, p2.product_category_name, 'unknown') AS product_category_en
+              FROM products AS p2
+              LEFT JOIN category_translation AS t2 ON t2.product_category_name = p2.product_category_name) AS cat
+          ON cat.product_id = oi.product_id
+  seller_state:
+    description: "Satıcının eyaleti (örnek: SP)"
+    column: sel.seller_state
+    # An order with sellers from two states counts once in each (distinct order-state pairs)
+    join:
+      order: >-
+        JOIN (SELECT DISTINCT oi2.order_id, s2.seller_state
+              FROM order_items AS oi2 JOIN sellers AS s2 ON s2.seller_id = oi2.seller_id) AS sel
+          ON sel.order_id = o.order_id
+      item: "JOIN sellers AS sel ON sel.seller_id = oi.seller_id"
+
+metrics:
+  order_count:
+    description: "Sipariş sayısı (sipariş tarihine göre)"
+    grain: order
+    base_filter: "1 = 1"
+    value: "COUNT(DISTINCT o.order_id)"
+    dimensions: [customer_state, purchase_month, product_category_en, seller_state]
+    caveat: "Tüm durumlar dahil (iptal edilenler de). 2018-09-01 ve sonrası siparişler veritabanında yok."
+
+  gmv:
+    description: "Ciro hacmi (GMV): ürün fiyatlarının toplamı, BRL. İptal ve temin edilemeyen siparişler hariç, kargo dahil değil"
+    grain: item
+    base_filter: "o.order_status NOT IN ('canceled', 'unavailable')"
+    value: "ROUND(SUM(oi.price), 2)"
+    dimensions: [customer_state, purchase_month, product_category_en, seller_state]
+    caveat: "GMV ciro hacmidir; gelir, katkı ya da net kâr değildir. Ödeme tutarlarının toplamı GMV değildir (kargo ve taksit içerir)."
+
+  avg_order_value:
+    description: "Ortalama sepet tutarı: GMV / sipariş sayısı, BRL (aynı filtrelerle)"
+    grain: item
+    base_filter: "o.order_status NOT IN ('canceled', 'unavailable')"
+    value: "ROUND(SUM(oi.price) / COUNT(DISTINCT o.order_id), 2)"
+    dimensions: [customer_state, purchase_month, product_category_en, seller_state]
+    caveat: "Kategoriye göre bakıldığında yalnız o kategorideki ürünlerin tutarı sayılır. GMV gelir değildir."
+
+  cancel_rate:
+    description: "İptal oranı: iptal edilen siparişler / tüm siparişler"
+    grain: order
+    base_filter: "1 = 1"
+    numerator: "SUM(CASE WHEN o.order_status = 'canceled' THEN 1 ELSE 0 END)"
+    denominator: "COUNT(*)"
+    dimensions: [customer_state, purchase_month, product_category_en, seller_state]
+    caveat: "Temin edilemeyen (unavailable) siparişler iptal sayılmaz. Gözlemsel oran; nedensellik değildir."
+
+  late_delivery_rate:
+    description: "Geç teslim oranı: teslim edilen siparişlerde, teslim gününün tahmini teslim gününden sonra olduğu siparişlerin oranı"
+    grain: order
+    base_filter: >-
+      o.order_status = 'delivered' AND o.order_delivered_customer_date IS NOT NULL
+      AND DATE(o.order_delivered_customer_date) <= DATE(:simulated_today)
+    numerator: "SUM(CASE WHEN DATE(o.order_delivered_customer_date) > DATE(o.order_estimated_delivery_date) THEN 1 ELSE 0 END)"
+    denominator: "COUNT(*)"
+    dimensions: [customer_state, purchase_month, product_category_en, seller_state]
+    caveat: "Takvim günü karşılaştırılır, saat değil. Gözlemsel oran; nedensellik değildir."
+
+  avg_delivery_days:
+    description: "Ortalama teslim süresi: sipariş anından teslim anına geçen gün, teslim edilen siparişlerde"
+    grain: order
+    base_filter: >-
+      o.order_status = 'delivered' AND o.order_delivered_customer_date IS NOT NULL
+      AND DATE(o.order_delivered_customer_date) <= DATE(:simulated_today)
+    value: "ROUND(AVG(julianday(o.order_delivered_customer_date) - julianday(o.order_purchase_timestamp)), 3)"
+    dimensions: [customer_state, purchase_month, product_category_en, seller_state]
+    caveat: "Saatler dahil hesaplanır (brief tanımı); yalnız günlerle hesaplanırsa biraz daha kısa çıkar. Gözlemseldir."
+
+  avg_review_score:
+    description: "Ortalama yorum puanı (1-5): önce her siparişin puanı tekilleştirilir, sonra ortalama alınır"
+    grain: order
+    base_filter: "1 = 1"
+    join: "JOIN (SELECT order_id, AVG(review_score) AS score FROM reviews GROUP BY order_id) AS r ON r.order_id = o.order_id"
+    value: "ROUND(AVG(r.score), 3)"
+    dimensions: [customer_state, purchase_month, product_category_en, seller_state]
+    caveat: "Yalnız yorumu olan siparişler. Birden fazla yorumu olan siparişin puanı ortalanır. Gözlemseldir; nedensellik değildir."
+
+  seller_late_shipping_rate:
+    description: "Satıcı kaynaklı gecikme oranı: kargoya veriliş günü, satıcının son gönderim gününden sonra olan siparişlerin oranı"
+    grain: order
+    base_filter: >-
+      o.order_delivered_carrier_date IS NOT NULL
+      AND DATE(o.order_delivered_carrier_date) <= DATE(:simulated_today)
+    join: "JOIN (SELECT order_id, MIN(DATE(shipping_limit_date)) AS limit_day FROM order_items GROUP BY order_id) AS lim ON lim.order_id = o.order_id"
+    numerator: "SUM(CASE WHEN DATE(o.order_delivered_carrier_date) > lim.limit_day THEN 1 ELSE 0 END)"
+    denominator: "COUNT(*)"
+    dimensions: [customer_state, purchase_month, product_category_en, seller_state]
+    caveat: "Bir siparişin herhangi bir ürünü son gönderim gününden sonra kargoya verildiyse sipariş geç sayılır (kural R13 ile aynı). Gözlemseldir."
