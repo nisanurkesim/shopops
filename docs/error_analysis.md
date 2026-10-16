@@ -72,3 +72,19 @@ Used later for the README and the blog post. "Result" lines refer to the eval ru
 - Fix: `run_metric` can now keep groups with at least `min_n` orders, sort them and keep the first `limit` rows, so these questions use the semantic layer. The prompt says to use `run_sql` only when no metric fits, and warns about joins that repeat an order.
 - Result: asked again, the agent used `run_metric("late_delivery_rate", group_by=["product_category_en"], min_n=100, sort="desc", limit=5)` instead of its own SQL.
 - Second mistake, found by the golden SQL (O5): `run_metric` sorted on the rounded value. office_furniture (0.08054) and baby (0.08046) were both shown as 0.0805, the tie was broken by name, and baby came 5th. Sorting now uses the unrounded value; `eval/make_golden_set.py` stops if the golden SQL and `run_metric` disagree, and all ops cases agree.
+
+## 11. Baseline B2 (raw schema): right SQL syntax, wrong definitions
+- What happened: in the ops run (2026-10-16, `eval/results/ops_b2.csv`) B2 matched the golden SQL in 1 of 8 cases (O3). Every query ran without an error; the numbers were wrong because B2 did not know what the terms mean:
+  - O1, O4: "late" compared timestamps instead of calendar days, and O1 also counted deliveries after SIMULATED_TODAY: 8.11% instead of 6.72%. The estimated date is always at 00:00, so a parcel delivered in the afternoon of the estimated day looks late.
+  - O2: no "delivered on or before today" filter: 12.56 days instead of 12.54.
+  - O5: joined `order_items`, so orders with several items were counted several times, plus timestamps: christmas_supplies came first with 14.4%.
+  - O6: timestamps and no per-order average of review scores: 2.57 instead of 2.27 for late orders.
+  - O7: GMV included freight (1,101,920 BRL instead of 945,456 BRL for 2018-01).
+  - O8: a different reading of "seller late": SP first with 9.72% instead of PR with 7.68%.
+- Cause: none of these is a syntax error, so self-correction cannot catch them. They are definition errors, which the brief names as the main risk of text-to-SQL.
+- Result: the Ops Data Agent matched 7 of 8 with the semantic layer, so the layer added 75 points. It also cost about three times the input tokens (list_metrics and a longer prompt) and more time.
+
+## 12. Ops agent, O6: review scores not averaged per order
+- What happened: same run. O6 needs `run_sql` (no metric splits review scores by late and on-time delivery). The agent's query averaged review rows instead of first averaging per order: 2.2715 instead of 2.2723 for late orders. Shown with two decimals both are 2.27, but 547 orders have more than one review, so the definition differs and the execution match fails.
+- Cause: the prompt warns that `reviews` can repeat an order, but the agent still joined it directly.
+- Possible fix: a dimension "delivered late / on time" in `metrics.yaml`, so `avg_review_score` grouped by it answers O6 with the official definition and no free SQL is needed.
