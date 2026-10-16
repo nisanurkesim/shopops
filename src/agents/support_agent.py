@@ -221,7 +221,7 @@ class SupportAgent:
                                         "session": "#" + hash_id(self.session.customer_unique_id), **data})
 
     def _generate(self, reply: AgentReply):
-        """Call Gemini and time every call. Retry when it is busy (503) or times out.
+        """Call Gemini and time every call. Retry when it is busy (503), cancels (499) or times out.
 
         Returns None on failure. Every attempt is recorded in reply.model_calls, so the
         log shows where the time of a slow turn went.
@@ -237,7 +237,9 @@ class SupportAgent:
                 return response
             except errors.APIError as e:
                 self.last_error = f"{e.code}: {e.message}"
-                retryable = isinstance(e, errors.ServerError)   # 429 means the quota is used up
+                # 5xx: Gemini is busy. 499: the call was cancelled on the server side (seen in
+                # the eval run, error analysis 8). 429 means the quota is used up: no retry.
+                retryable = isinstance(e, errors.ServerError) or e.code == 499
             except Exception as e:   # timeout or network error
                 self.last_error = f"{type(e).__name__}: {e}"
                 retryable = True

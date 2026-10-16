@@ -4,6 +4,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from google.genai import errors
+
 import src.agents.support_agent as support_agent
 from src.tools.orders import Session
 
@@ -57,6 +59,21 @@ class ModelCallTest(unittest.TestCase):
         reply = agent.ask("Selam")
         self.assertEqual(reply.stop_reason, "api_error")
         self.assertEqual(len(reply.model_calls), support_agent.MAX_API_RETRIES + 1)
+
+    def test_cancelled_call_is_retried(self):
+        # 499 came back once in the eval run and ended the turn (error analysis 8)
+        client = FakeClient([errors.ClientError(499, "The operation was cancelled."), text_response("Merhaba")])
+        agent = support_agent.SupportAgent(Session("alice"), client=client)
+        reply = agent.ask("Selam")
+        self.assertEqual(reply.stop_reason, "answer")
+        self.assertIn("499", reply.model_calls[0]["error"])
+
+    def test_quota_error_is_not_retried(self):
+        client = FakeClient([errors.ClientError(429, "Quota exceeded"), text_response("Merhaba")])
+        agent = support_agent.SupportAgent(Session("alice"), client=client)
+        reply = agent.ask("Selam")
+        self.assertEqual(reply.stop_reason, "api_error")
+        self.assertEqual(len(reply.model_calls), 1)
 
 
 if __name__ == "__main__":

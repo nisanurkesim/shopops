@@ -31,11 +31,15 @@ CREATE TABLE return_requests (order_id TEXT, status TEXT);
 DELIVERED = "aaaa1111bbbb2222cccc3333dddd4444"   # delivered 5 days ago
 OLD_SHIPPED = "eeee5555ffff6666aaaa7777bbbb8888"  # shipped, estimate long passed
 FUTURE = "cccc9999dddd0000eeee1111ffff2222"       # delivery date after SIMULATED_TODAY
+LATE_OLD = "dddd3333eeee4444ffff5555aaaa6666"     # delivered 22 days ago, 16 days late
+ONTIME_OLD = "ffff7777aaaa8888bbbb9999cccc0000"   # delivered 22 days ago, before the estimate
 
 ORDERS = [
     (DELIVERED, "c1", "delivered", "2018-08-10 10:00:00", "2018-08-14 09:00:00", "2018-08-27 15:00:00", "2018-08-30 00:00:00"),
     (OLD_SHIPPED, "c2", "shipped", "2018-06-01 10:00:00", "2018-06-03 09:00:00", None, "2018-06-20 00:00:00"),
     (FUTURE, "c3", "delivered", "2018-08-25 10:00:00", "2018-08-27 09:00:00", "2018-09-05 12:00:00", "2018-09-10 00:00:00"),
+    (LATE_OLD, "c4", "delivered", "2018-07-01 10:00:00", "2018-07-03 09:00:00", "2018-08-10 15:00:00", "2018-07-25 00:00:00"),
+    (ONTIME_OLD, "c5", "delivered", "2018-08-01 10:00:00", "2018-08-03 09:00:00", "2018-08-10 15:00:00", "2018-08-15 00:00:00"),
 ]
 
 
@@ -47,7 +51,7 @@ class ToolTextTest(unittest.TestCase):
         cls.db = Path(cls.tmp.name) / "test.db"
         con = sqlite3.connect(cls.db)
         con.executescript(SCHEMA)
-        con.executemany("INSERT INTO customers VALUES (?, ?)", [("c1", "alice"), ("c2", "alice"), ("c3", "alice")])
+        con.executemany("INSERT INTO customers VALUES (?, ?)", [("c1", "alice"), ("c2", "alice"), ("c3", "alice"), ("c4", "alice"), ("c5", "alice")])
         con.executemany("INSERT INTO orders VALUES (?, ?, ?, ?, ?, ?, ?)", ORDERS)
         con.executemany("INSERT INTO order_items VALUES (?, ?, ?, ?)",
                         [(o[0], 100.0, 20.0, None) for o in ORDERS])
@@ -84,6 +88,19 @@ class ToolTextTest(unittest.TestCase):
         codes = [returns.ELIGIBLE, returns.NOT_ELIGIBLE_WINDOW, returns.IN_TRANSIT, returns.NEEDS_HUMAN,
                  returns.NOT_DELIVERED_CANCELLABLE, returns.ALREADY_CLOSED, returns.DUPLICATE_REQUEST]
         self.assertEqual([c for c in codes if c not in DECISION_TEXT], [])
+
+    def test_freight_only_has_its_own_text(self):
+        # Error analysis 9: "Iade suresi gecmis" alone hid the freight refund (S15)
+        result = check_return_eligibility(self.alice, LATE_OLD, "late", db_path=self.db)
+        self.assertEqual(result["code"], "NOT_ELIGIBLE_WINDOW")
+        self.assertEqual(result["refund_amount"], 20.0)
+        self.assertIn("kargo ücreti", result["decision_text"])
+
+    def test_window_passed_without_freight_keeps_the_plain_text(self):
+        result = check_return_eligibility(self.alice, ONTIME_OLD, "changed_mind", db_path=self.db)
+        self.assertEqual(result["code"], "NOT_ELIGIBLE_WINDOW")
+        self.assertEqual(result["refund_amount"], 0.0)
+        self.assertEqual(result["decision_text"], DECISION_TEXT["NOT_ELIGIBLE_WINDOW"])
 
     # --- 4: lost parcel flag in the return tool ---
 
