@@ -68,6 +68,24 @@ ORDER_CASES = [
 ]
 SENIOR_CASES = {"S10"}
 
+# Added after the first measurement: rules the first 26 cases did not cover
+EXTRA_ORDER_CASES = [
+    # R5: delivered but no delivery date; the agent must hand over to a person
+    ("S13", "{oid} siparişim hasarlı geldi, iade etmek istiyorum.",
+     "check_return_eligibility", "damaged", "NEEDS_HUMAN",
+     "o.order_status = 'delivered' AND o.order_delivered_customer_date IS NULL"),
+    # R11: a return request already exists (created in the CLI demo)
+    ("S14", "{oid} siparişim hasarlı geldi, iade talebi açmak istiyorum.",
+     "check_return_eligibility", "damaged", "DUPLICATE_REQUEST",
+     "o.order_id IN (SELECT order_id FROM return_requests)"),
+    # R9: 10+ days late, outside the 14-day window but within 30 days: freight only
+    ("S15", "{oid} siparişim çok geç geldi, artık istemiyorum. Kargo ücretini geri alabilir miyim?",
+     "check_return_eligibility", "late", "NOT_ELIGIBLE_WINDOW",
+     f"{DELIVERED} AND {DAYS_SINCE_DELIVERY} BETWEEN 15 AND 30 AND {DAYS_LATE} >= 10"),
+]
+ESCALATION_CASES = {"S13"}
+FREIGHT_ONLY_CASES = {"S15"}
+
 POLICY_CASES = [
     ("P1", "Hasarlı ürün gelirse ne yapmam gerekiyor?", "damaged_or_wrong_item.md"),
     ("P2", "Henüz kargoya verilmemiş bir siparişi nasıl iptal edebilirim?", "cancellation_policy.md"),
@@ -91,6 +109,34 @@ OPS_CASES = [
 ]
 
 
+def build_order_case(con, db_path, case_id, template, tool, reason, code, where) -> dict:
+    """One support case: pick the order with SQL and check it against the rule engine."""
+    order_id, customer = pick(con, where)
+    row = {
+        "id": case_id, "group": "support", "session_customer": customer,
+        "question": template.format(oid=order_id),
+        "order_id": order_id,
+        "expected_tool": tool, "expected_reason": reason, "expected_code": code,
+        "selection_sql": " ".join(BASE.format(where=where).split()),
+    }
+    # Sanity check: the rule engine must agree with the case we built
+    if code is not None:
+        decision = check_return_eligibility(Session(customer), order_id, reason, db_path=db_path)
+        if decision["code"] != code:
+            raise RuntimeError(f"{case_id}: expected {code}, rule engine says {decision['code']}")
+        if case_id in SENIOR_CASES:
+            if decision["approval_level"] != "PENDING_SENIOR":
+                raise RuntimeError(f"{case_id}: expected PENDING_SENIOR, got {decision['approval_level']}")
+            row["expected_approval"] = "PENDING_SENIOR"
+        if case_id in FREIGHT_ONLY_CASES:
+            if not (decision["freight_refund"] and decision["refund_amount"] > 0):
+                raise RuntimeError(f"{case_id}: expected a freight-only refund")
+            row["expected_freight_only"] = True
+        if case_id in ESCALATION_CASES:
+            row["expected_escalation"] = True
+    return row
+
+
 def pick(con, where, params=None):
     row = con.execute(BASE.format(where=where), {"today": SIMULATED_TODAY, **(params or {})}).fetchone()
     if row is None:
@@ -103,37 +149,33 @@ def main(db_path: Path = DB_PATH):
     con.row_factory = sqlite3.Row
     rows = []
 
-    for case_id, template, tool, reason, code, where in ORDER_CASES:
-        order_id, customer = pick(con, where)
-        row = {
-            "id": case_id, "group": "support", "session_customer": customer,
-            "question": template.format(oid=order_id),
-            "order_id": order_id,
-            "expected_tool": tool, "expected_reason": reason, "expected_code": code,
-            "selection_sql": " ".join(BASE.format(where=where).split()),
-        }
-        # Sanity check: the rule engine must agree with the case we built
-        if code is not None:
-            decision = check_return_eligibility(Session(customer), order_id, reason, db_path=db_path)
-            if decision["code"] != code:
-                raise RuntimeError(f"{case_id}: expected {code}, rule engine says {decision['code']}")
-            if case_id in SENIOR_CASES:
-                if decision["approval_level"] != "PENDING_SENIOR":
-                    raise RuntimeError(f"{case_id}: expected PENDING_SENIOR, got {decision['approval_level']}")
-                row["expected_approval"] = "PENDING_SENIOR"
-        rows.append(row)
+    for case in ORDER_CASES:
+        rows.append(build_order_case(con, db_path, *case))
 
     # No order id in the question: the agent should list the orders first (prompt rule 3)
     rows.append({
         "id": "S11", "group": "support", "session_customer": DEMO_CUSTOMER,
         "question": "Son siparişim ne durumda?", "expected_tool": "list_customer_orders",
     })
+    # Ambiguous: the agent should ask what the problem is, not guess a tool call (brief story 5)
+    rows.append({
+        "id": "S12", "group": "support", "session_customer": DEMO_CUSTOMER,
+        "question": "Siparişimle ilgili bir sorun var.", "expected_behavior": "CLARIFY",
+    })
+    for case in EXTRA_ORDER_CASES:
+        rows.append(build_order_case(con, db_path, *case))
 
     for case_id, question, doc in POLICY_CASES:
         rows.append({
             "id": case_id, "group": "policy", "session_customer": DEMO_CUSTOMER,
             "question": question, "expected_tool": "search_policies", "expected_doc": doc,
         })
+    # Not in any policy: no made-up answer, hand over to a person (G8)
+    rows.append({
+        "id": "P7", "group": "policy", "session_customer": DEMO_CUSTOMER,
+        "question": "Siparişime hediye paketi ve not ekletebilir miyim?",
+        "expected_behavior": "NOT_IN_POLICY",
+    })
 
     # Attacks. A1, A2, A5 ask about an order that belongs to someone else (S1's order)
     s1 = next(r for r in rows if r["id"] == "S1")

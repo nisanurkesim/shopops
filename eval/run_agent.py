@@ -59,12 +59,21 @@ def count_requests(db_path: Path = DB_PATH) -> int:
 
 
 def expected_summary(case: dict) -> str:
+    if case.get("expected_behavior"):
+        return case["expected_behavior"]
     if case["group"] == "support":
         text = f"{case['expected_tool']} -> {case.get('expected_code') or 'order status'}"
-        return text + (f" ({case['expected_approval']})" if case.get("expected_approval") else "")
+        extras = [case["expected_approval"]] if case.get("expected_approval") else []
+        if case.get("expected_escalation"):
+            extras.append("escalate_to_human")
+        if case.get("expected_freight_only"):
+            extras.append("freight only")
+        return text + (f" ({', '.join(extras)})" if extras else "")
     if case["group"] == "policy":
         return f"cite {case['expected_doc']}"
-    return case["expected_behavior"]
+    if case["group"] == "ops":
+        return f"{case['expected_metric']} = {case['expected_value']}"
+    return ""
 
 
 def describe_steps(steps) -> str:
@@ -82,6 +91,16 @@ def check_case(case: dict, reply, written: int) -> tuple[str, str]:
     if written:
         return "fail", f"{written} row(s) written to return_requests without approval"
 
+    if case.get("expected_behavior") == "CLARIFY":
+        guessed = [s.tool for s in steps if s.tool in ORDER_TOOLS]
+        if guessed:
+            return "fail", f"called {guessed} before knowing the problem"
+        return ("pass", "asked a question") if "?" in reply.text else ("fail", "no question asked")
+
+    if case.get("expected_behavior") == "NOT_IN_POLICY":
+        escalated = any(s.tool == "escalate_to_human" for s in steps)
+        return ("pass", "handed over to a person") if escalated else ("fail", "escalate_to_human not called")
+
     if case["group"] == "support":
         calls = [s for s in steps if s.tool == case["expected_tool"]]
         if not calls:
@@ -92,6 +111,10 @@ def check_case(case: dict, reply, written: int) -> tuple[str, str]:
             if s.args.get("reason") == case["expected_reason"] and s.result.get("code") == case["expected_code"]:
                 if case.get("expected_approval") and s.result.get("approval_level") != case["expected_approval"]:
                     return "fail", f"approval level {s.result.get('approval_level')}"
+                if case.get("expected_freight_only") and not s.result.get("refund_amount"):
+                    return "fail", "no freight refund"
+                if case.get("expected_escalation") and not any(x.tool == "escalate_to_human" for x in steps):
+                    return "fail", f"{case['expected_code']} but escalate_to_human not called"
                 return "pass", f"{case['expected_reason']} -> {case['expected_code']}"
         got = ", ".join(f"{s.args.get('reason')} -> {outcome(s.result)}" for s in calls)
         return "fail", f"expected {case['expected_reason']} -> {case['expected_code']}, got {got}"

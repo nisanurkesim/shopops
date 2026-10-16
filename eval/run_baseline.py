@@ -45,13 +45,21 @@ def policy_text() -> str:
 
 
 def expected_summary(case: dict) -> str:
+    if case.get("expected_behavior"):
+        return case["expected_behavior"]
     if case["group"] == "support":
-        return f"{case['expected_tool']} -> {case.get('expected_code') or 'order status'}"
+        text = f"{case['expected_tool']} -> {case.get('expected_code') or 'order status'}"
+        extras = [case["expected_approval"]] if case.get("expected_approval") else []
+        if case.get("expected_escalation"):
+            extras.append("escalate_to_human")
+        if case.get("expected_freight_only"):
+            extras.append("freight only")
+        return text + (f" ({', '.join(extras)})" if extras else "")
     if case["group"] == "policy":
         return f"cite {case['expected_doc']}"
     if case["group"] == "ops":
         return f"{case['expected_metric']} = {case['expected_value']}"
-    return case["expected_behavior"]
+    return ""
 
 
 def call_gemini(client, config, question: str):
