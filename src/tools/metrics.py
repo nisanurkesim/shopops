@@ -38,8 +38,14 @@ def dimension_join(dimension: dict, grain: str) -> str:
 
 
 def build_metric_sql(name: str, filters: dict | None = None, group_by: list | None = None,
+                     min_n: int | None = None, sort: str | None = None, limit: int | None = None,
                      path: Path = METRICS_PATH) -> tuple[str, dict] | dict:
-    """SQL and parameters for one metric, or an error dict. Runs nothing."""
+    """SQL and parameters for one metric, or an error dict. Runs nothing.
+
+    With group_by, min_n keeps the groups with at least that many orders (HAVING), sort
+    ("desc" or "asc") orders the groups by the metric, and limit keeps the first rows. So
+    "top 5 categories with at least 100 orders" uses the official definition too.
+    """
     layer = load_semantic_layer(path)
     metric = layer["metrics"].get(name)
     if metric is None:
@@ -56,6 +62,17 @@ def build_metric_sql(name: str, filters: dict | None = None, group_by: list | No
     for dim, value in filters.items():
         if not isinstance(value, (str, int, float)):
             return {"error": "INVALID_FILTER", "message": f"The filter value for '{dim}' must be one value."}
+    if (min_n is not None or sort is not None) and not group_by:
+        return {"error": "NEEDS_GROUP_BY", "message": "min_n and sort only work together with group_by."}
+    if sort is not None and sort not in ("desc", "asc"):
+        return {"error": "INVALID_SORT", "message": "sort must be 'desc' or 'asc'."}
+    try:
+        min_n = None if min_n is None else int(min_n)
+        limit = None if limit is None else int(limit)
+    except (TypeError, ValueError):
+        return {"error": "INVALID_NUMBER", "message": "min_n and limit must be whole numbers."}
+    if (min_n is not None and min_n < 1) or (limit is not None and not 1 <= limit <= MAX_ROWS):
+        return {"error": "INVALID_NUMBER", "message": f"min_n must be at least 1 and limit between 1 and {MAX_ROWS}."}
 
     grain = metric["grain"]
     from_sql = "FROM orders AS o" if grain == "order" else \
@@ -86,15 +103,21 @@ def build_metric_sql(name: str, filters: dict | None = None, group_by: list | No
         sql += "\n".join(joins) + "\n"
     sql += "WHERE " + "\n  AND ".join(where)
     if group_by:
-        sql += f"\nGROUP BY {', '.join(group_by)}\nORDER BY {', '.join(group_by)}"
-    sql += f"\nLIMIT {MAX_ROWS}"
+        sql += f"\nGROUP BY {', '.join(group_by)}"
+        if min_n is not None:
+            sql += f"\nHAVING {n_sql} >= :min_n"
+            params["min_n"] = min_n
+        order = f"{name} {sort.upper()}, " if sort else ""
+        sql += f"\nORDER BY {order}{', '.join(group_by)}"
+    sql += f"\nLIMIT {limit or MAX_ROWS}"
     return sql, params
 
 
 def run_metric(name: str, filters: dict | None = None, group_by: list | None = None,
+               min_n: int | None = None, sort: str | None = None, limit: int | None = None,
                db_path: Path = DB_PATH, path: Path = METRICS_PATH) -> dict:
     """Run one metric. Returns the rows, the SQL that produced them and the metric's caveat."""
-    built = build_metric_sql(name, filters, group_by, path)
+    built = build_metric_sql(name, filters, group_by, min_n, sort, limit, path)
     if isinstance(built, dict):
         return built
     sql, params = built

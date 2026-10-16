@@ -20,8 +20,10 @@ TOOL_DECLARATIONS = [
         name="run_metric",
         description=(
             "Compute a defined metric with its official SQL. Optional filters (one value per "
-            "dimension) and up to two group_by dimensions. Returns the rows, the SQL and a caveat. "
-            "Use this whenever the question matches a metric."
+            "dimension) and up to two group_by dimensions. With group_by, min_n keeps groups with "
+            "at least that many orders, sort orders the groups by the metric and limit keeps the "
+            "first rows (for example 'top 5 categories with at least 100 orders'). Returns the "
+            "rows, the SQL and a caveat. Use this whenever the question matches a metric."
         ),
         parameters_json_schema={
             "type": "object",
@@ -33,6 +35,9 @@ TOOL_DECLARATIONS = [
                     "properties": {d: {"type": "string"} for d in DIMENSIONS},
                 },
                 "group_by": {"type": "array", "items": {"type": "string", "enum": DIMENSIONS}, "maxItems": 2},
+                "min_n": {"type": "integer", "description": "Only groups with at least this many orders."},
+                "sort": {"type": "string", "enum": ["desc", "asc"], "description": "Order the groups by the metric."},
+                "limit": {"type": "integer", "description": "Keep only the first rows (1-1000)."},
             },
             "required": ["metric_name"],
         },
@@ -40,9 +45,9 @@ TOOL_DECLARATIONS = [
     types.FunctionDeclaration(
         name="run_sql",
         description=(
-            "Run one read-only SELECT on the order database when no metric fits, or when the "
-            "question needs ranking, a threshold (HAVING) or top N. At most 1000 rows. Returns "
-            "the rows or an error message you can use to correct the query."
+            "Run one read-only SELECT on the order database, only when no defined metric fits "
+            "the question. At most 1000 rows. Returns the rows or an error message you can use "
+            "to correct the query."
         ),
         parameters_json_schema={
             "type": "object",
@@ -59,7 +64,8 @@ def execute_ops_tool(name: str, args: dict) -> dict:
         if name == "list_metrics":
             return list_metrics()
         if name == "run_metric":
-            return run_metric(args["metric_name"], args.get("filters") or {}, args.get("group_by") or [])
+            return run_metric(args["metric_name"], args.get("filters") or {}, args.get("group_by") or [],
+                              min_n=args.get("min_n"), sort=args.get("sort"), limit=args.get("limit"))
         if name == "run_sql":
             return run_sql(args["query"])
         return {"error": "UNKNOWN_TOOL", "message": f"There is no tool called '{name}'."}

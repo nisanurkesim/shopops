@@ -17,6 +17,6 @@ SIMULATED_TODAY = "2018-09-01"
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 
 # Sampling temperature, set explicitly so every result file can name it.
-# 1.0 is the model default (checked with scripts/model_info.py) and the value
+# 1.0 is the model default (checked with scripts/gemini_check.py) and the value
 # Google recommends for Gemini 3 models; lower values can cause loops.
 TEMPERATURE = 1.0

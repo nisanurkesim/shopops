@@ -123,6 +123,26 @@ class MetricsTest(unittest.TestCase):
         grouped = self.value("cancel_rate", group_by=["customer_state"])
         self.assertEqual(grouped["rows"], [["RJ", 0.5, 2], ["SP", 0.0, 2]])
 
+    def test_threshold_sort_and_top_n(self):
+        # "Categories with at least 3 orders, highest order count first, top 1"
+        result = self.value("order_count", group_by=["product_category_en"])
+        self.assertEqual(len(result["rows"]), 2)
+        top = run_metric("order_count", group_by=["product_category_en"], min_n=3, sort="desc", limit=1,
+                         db_path=self.db)
+        self.assertEqual(top["rows"], [["furniture", 3, 3]])
+        self.assertIn("HAVING", top["sql"])
+        lowest = run_metric("cancel_rate", group_by=["customer_state"], sort="asc", limit=1, db_path=self.db)
+        self.assertEqual(lowest["rows"], [["SP", 0.0, 2]])
+
+    def test_threshold_options_are_checked(self):
+        self.assertEqual(run_metric("gmv", min_n=10, db_path=self.db)["error"], "NEEDS_GROUP_BY")
+        self.assertEqual(run_metric("gmv", group_by=["customer_state"], sort="up", db_path=self.db)["error"],
+                         "INVALID_SORT")
+        self.assertEqual(run_metric("gmv", group_by=["customer_state"], limit=0, db_path=self.db)["error"],
+                         "INVALID_NUMBER")
+        self.assertEqual(run_metric("gmv", group_by=["customer_state"], min_n="x", db_path=self.db)["error"],
+                         "INVALID_NUMBER")
+
     def test_result_has_sql_and_caveat(self):
         result = self.value("gmv")
         self.assertIn("SELECT", result["sql"])
