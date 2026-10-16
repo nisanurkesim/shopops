@@ -141,7 +141,7 @@ The attacks from the project brief (section 9.4) and where they are tested:
 
 ## Setup
 
-Requires Python 3.10+.
+Tested with Python 3.14 on Windows. `requirements.txt` pins the versions used during development.
 
 ```bash
 python -m venv .venv

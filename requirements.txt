@@ -1,6 +1,8 @@
-kagglehub
-pandas
-sentence-transformers
-chromadb
-google-genai
-python-dotenv
+# Direct dependencies, pinned to the versions the project was tested with
+# (Python 3.14, Windows, October 2026). Their own dependencies are chosen by pip.
+kagglehub==1.0.2
+pandas==3.0.6
+sentence-transformers==6.1.0
+chromadb==1.5.9
+google-genai==2.29.0
+python-dotenv==1.2.4
