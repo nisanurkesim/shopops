@@ -11,7 +11,7 @@ from pathlib import Path
 
 # Let this script import config.py and src/ from the project root
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from config import GEMINI_MODEL, SIMULATED_TODAY
+from config import GEMINI_MODEL, SIMULATED_TODAY, TEMPERATURE
 from google.genai import errors, types
 from src.agents.support_agent import make_client
 from src.knowledge.policies import POLICY_DIR
@@ -21,7 +21,7 @@ GOLDEN_PATH = EVAL_DIR / "golden_set.jsonl"
 OUT_PATH = EVAL_DIR / "results" / "baseline.csv"
 PAUSE_SECONDS = 5   # between questions, to stay under the per-minute limit
 
-FIELDS = ["id", "group", "question", "expected", "model", "answer",
+FIELDS = ["id", "group", "question", "expected", "model", "temperature", "answer",
           "input_tokens", "output_tokens", "latency_s", "error", "hallucinated"]
 
 
@@ -36,6 +36,12 @@ def load_previous() -> dict[str, dict]:
         return {}
     with OUT_PATH.open(encoding="utf-8-sig", newline="") as f:
         return {row["id"]: row for row in csv.DictReader(f)}
+
+
+def same_settings(old: dict) -> bool:
+    """An earlier answer is reused only if it had the same model and temperature.
+    Rows from before TEMPERATURE was set used the API default, which is 1.0."""
+    return old.get("model") == GEMINI_MODEL and float(old.get("temperature") or 1.0) == TEMPERATURE
 
 
 def policy_text() -> str:
@@ -90,21 +96,22 @@ def main():
         "Müşterinin sorusunu aşağıdaki mağaza politikalarına göre kısa ve sade Türkçe ile cevapla.\n\n"
         + policy_text()
     )
-    config = types.GenerateContentConfig(system_instruction=system_prompt)
+    config = types.GenerateContentConfig(system_instruction=system_prompt, temperature=TEMPERATURE)
     client = make_client()
 
     rows = []
     quota_exhausted = False
     for i, case in enumerate(cases, start=1):
         old = previous.get(case["id"])
-        if old and old.get("model") == GEMINI_MODEL and old.get("answer") and not old.get("error"):
-            rows.append(old)   # already answered with this model: keep it
+        if old and same_settings(old) and old.get("answer") and not old.get("error"):
+            old["temperature"] = TEMPERATURE
+            rows.append(old)   # already answered with these settings: keep it
             print(f"[{i}/{len(cases)}] {case['id']}: kept from earlier run")
             continue
 
         row = {
             "id": case["id"], "group": case["group"], "question": case["question"],
-            "expected": expected_summary(case), "model": GEMINI_MODEL, "answer": "",
+            "expected": expected_summary(case), "model": GEMINI_MODEL, "temperature": TEMPERATURE, "answer": "",
             "input_tokens": 0, "output_tokens": 0, "latency_s": 0, "error": "", "hallucinated": "",
         }
         if quota_exhausted:
@@ -134,7 +141,7 @@ def main():
 
     write_rows(rows)
     answered = [r for r in rows if r["answer"] and not r["error"]]
-    print(f"\nWrote {len(rows)} rows to {OUT_PATH} (model: {GEMINI_MODEL})")
+    print(f"\nWrote {len(rows)} rows to {OUT_PATH} (model: {GEMINI_MODEL}, temperature: {TEMPERATURE})")
     print(f"Answered: {len(answered)}/{len(rows)}")
     if quota_exhausted:
         print("Daily quota reached. Run the script again after the quota resets; "

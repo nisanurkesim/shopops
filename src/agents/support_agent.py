@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import errors, types
 
-from config import GEMINI_MODEL, PROJECT_ROOT, SIMULATED_TODAY
+from config import GEMINI_MODEL, PROJECT_ROOT, SIMULATED_TODAY, TEMPERATURE
 from src.agents.support_tools import TOOL_DECLARATIONS, execute_tool
 from src.agents.trace import hash_id, outcome, write_event
 from src.tools.orders import Session
@@ -87,6 +87,7 @@ class SupportAgent:
         self.interface_note: str | None = None      # outcome of the last confirmation, sent with the next message
         self.config = types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
+            temperature=TEMPERATURE,
             tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],
             # We run the tools ourselves, so the loop and its limits stay in our code
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
