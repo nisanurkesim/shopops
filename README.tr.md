@@ -140,7 +140,7 @@ Proje belgesindeki saldırılar (bölüm 9.4) ve nerede test edildikleri:
 
 ## Kurulum
 
-Python 3.10 veya üstü gerekiyor.
+Python 3.14 ile Windows'ta test edildi. `requirements.txt`, geliştirme sırasında kullanılan sürümleri sabitliyor.
 
 ```bash
 python -m venv .venv
