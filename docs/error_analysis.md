@@ -45,8 +45,8 @@ Used later for the README and the blog post.
 - Fix: the note after a decline should say that the summary is gone and that `create_return_request` must be called again if the customer still wants the return.
 - Good side: a "yes" typed into the chat cannot approve anything (G1).
 
-## 8. Long turns: the Gemini SDK retries on its own
+## 8. Long turns with normal token counts
 - What happened: in the final run and in the CLI demo some turns took 3-5 minutes with normal token counts.
-- Clue: a traceback after Ctrl + C showed `tenacity` and `_retry` inside `google.genai`, so the SDK retries failed requests itself, before our own retry in `SupportAgent._generate` sees an error.
-- Impact: the latency in `eval/results/agent.csv` includes these hidden waits and is not the agent's real speed.
-- Next step: check the SDK retry settings and log which error is retried.
+- First guess (not confirmed): a traceback after Ctrl + C showed `tenacity` and `_retry` inside `google.genai`. This only shows that every request goes through the SDK's retry helper, not that it retried. The cause is still unknown.
+- Change: every model call is now timed and logged on its own (`model_calls`: latency, tokens, error); one call may take at most 60 seconds (`HTTP_TIMEOUT_S`), and a timeout is retried like a 503.
+- Result: to be filled in after the next measurement.
