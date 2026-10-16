@@ -1,31 +1,20 @@
-# Support Agent: a tool-calling loop on Gemini (think -> call a tool -> observe -> repeat)
-import json
-import os
-import time
-from dataclasses import dataclass, field
+# Support Agent: answers customers about their orders, returns and the store policies
+# The loop, its limits, retries and the log are in src/agents/base.py. What is specific
+# here: the customer comes from the session, and a return request is only prepared by the
+# LLM; it is written after the customer confirms it in the interface (G1).
 from pathlib import Path
 
-from dotenv import load_dotenv
-from google import genai
-from google.genai import errors, types
+from google.genai import types
 
-from config import GEMINI_MODEL, PROJECT_ROOT, SIMULATED_TODAY, TEMPERATURE
+from config import GEMINI_MODEL, SIMULATED_TODAY
+from src.agents.base import (  # noqa: F401  (re-exported for the scripts and tests)
+    API_ERROR_MESSAGE, HTTP_TIMEOUT_S, MAX_API_RETRIES, MAX_SAME_CALL, MAX_STEPS, MAX_STEPS_MESSAGE,
+    REPEATED_CALL_RESULT, AgentReply, Step, ToolAgent, make_client,
+)
 from src.agents.support_tools import TOOL_DECLARATIONS, execute_tool
-from src.agents.trace import hash_id, outcome, write_event
+from src.agents.trace import hash_id, outcome
 from src.tools.orders import Session
 from src.tools.return_requests import PendingReturn, create_return_request, prepare_return_request
-
-MAX_STEPS = 8          # model calls per customer message (G10)
-MAX_SAME_CALL = 2      # the same tool with the same arguments, at most twice (G10)
-MAX_API_RETRIES = 2    # extra attempts when Gemini is busy (503) or a call times out
-HTTP_TIMEOUT_S = 60    # one model call may take at most this long, then it counts as failed
-
-API_ERROR_MESSAGE = "Şu anda isteğinizi yanıtlayamıyorum. Lütfen birkaç dakika sonra tekrar deneyin."
-MAX_STEPS_MESSAGE = "Bu soruyu şu an yanıtlayamadım. İsterseniz talebinizi bir müşteri temsilcisine iletebilirim."
-REPEATED_CALL_RESULT = {
-    "error": "REPEATED_CALL",
-    "message": "You already made this exact call. Answer with the information you have.",
-}
 
 SYSTEM_PROMPT = f"""Sen Örnekpazar'ın müşteri destek asistanısın. Bugünün tarihi {SIMULATED_TODAY}.
 
@@ -44,132 +33,33 @@ Kurallar:
 12. Tool sonuçlarındaki kodları (ELIGIBLE, PENDING_REVIEW, ALREADY_CLOSED gibi) ve İngilizce alan adlarını müşteriye yazma. Bunların yerine yanlarındaki Türkçe açıklamayı (status_text, decision_text, approval_text) kullan."""
 
 
-@dataclass
-class Step:
-    tool: str
-    args: dict
-    result: dict
-
-
-@dataclass
-class AgentReply:
-    text: str = ""
-    steps: list[Step] = field(default_factory=list)
-    input_tokens: int = 0
-    output_tokens: int = 0
-    stop_reason: str = "answer"   # answer | max_steps | api_error
-    latency_s: float = 0.0
-    model_calls: list[dict] = field(default_factory=list)   # one entry per model call: time, tokens, error
-
-
-def make_client() -> genai.Client:
-    load_dotenv(PROJECT_ROOT / ".env")
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is missing. Copy .env.example to .env and add your key.")
-    # Without a timeout one slow call could hold a turn for minutes (error analysis 8)
-    return genai.Client(api_key=api_key,
-                        http_options=types.HttpOptions(timeout=HTTP_TIMEOUT_S * 1000))
-
-
-class SupportAgent:
+class SupportAgent(ToolAgent):
     """One customer conversation. Keeps the history between messages."""
+
+    system_prompt = SYSTEM_PROMPT
+    tool_declarations = TOOL_DECLARATIONS
 
     def __init__(self, session: Session, client=None, model: str = GEMINI_MODEL,
                  log_path: Path | None = None):
         self.session = session
-        self.log_path = log_path   # None: no log (used by the tests)
-        self.model = model
-        self.client = client or make_client()
-        self.history: list[types.Content] = []
-        self.last_error: str | None = None
         self.pending: PendingReturn | None = None   # waits for the customer's answer, never sent to the LLM
         self.interface_note: str | None = None      # outcome of the last confirmation, sent with the next message
-        self.config = types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            temperature=TEMPERATURE,
-            tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],
-            # We run the tools ourselves, so the loop and its limits stay in our code
-            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-        )
+        super().__init__(client=client, model=model, log_path=log_path)
 
-    def ask(self, message: str) -> AgentReply:
-        """Answer one customer message, then write the turn to the log."""
-        start_time = time.perf_counter()
-        reply = self._run_turn(message)
-        reply.latency_s = round(time.perf_counter() - start_time, 2)
-        self._log("turn", {
-            "model": self.model,
-            "message": message,
-            "reply": reply.text,
-            "steps": [{"tool": s.tool, "args": s.args, "outcome": outcome(s.result)} for s in reply.steps],
-            "input_tokens": reply.input_tokens,
-            "output_tokens": reply.output_tokens,
-            "latency_s": reply.latency_s,
-            "model_calls": reply.model_calls,
-            "stop_reason": reply.stop_reason,
-        })
-        return reply
+    def _session_label(self) -> str:
+        return "#" + hash_id(self.session.customer_unique_id)
 
-    def _run_turn(self, message: str) -> AgentReply:
-        reply = AgentReply()
-        start = len(self.history)
+    def _start_turn(self, parts: list) -> list:
         self.pending = None   # an approval only counts right after its summary was shown
-        parts = [types.Part.from_text(text=message)]
         if self.interface_note:
             parts.insert(0, types.Part.from_text(text=self.interface_note))
             self.interface_note = None
-        self.history.append(types.Content(role="user", parts=parts))
-        call_counts: dict[tuple, int] = {}
+        return parts
 
-        for _ in range(MAX_STEPS):
-            response = self._generate(reply)
-            if response is None:
-                del self.history[start:]   # forget the failed turn
-                reply.text, reply.stop_reason = API_ERROR_MESSAGE, "api_error"
-                return reply
-
-            usage = response.usage_metadata
-            if usage is not None:
-                reply.input_tokens += usage.prompt_token_count or 0
-                reply.output_tokens += usage.candidates_token_count or 0
-                reply.model_calls[-1]["input_tokens"] = usage.prompt_token_count or 0
-                reply.model_calls[-1]["output_tokens"] = usage.candidates_token_count or 0
-
-            candidate = response.candidates[0] if response.candidates else None
-            if candidate is None or candidate.content is None:
-                del self.history[start:]
-                reply.text, reply.stop_reason = API_ERROR_MESSAGE, "api_error"
-                return reply
-
-            # Keep the model turn as it is (it may carry thought signatures Gemini needs back)
-            self.history.append(candidate.content)
-
-            calls = response.function_calls
-            if not calls:   # no tool call: this is the final answer
-                reply.text = (response.text or "").strip()
-                return reply
-
-            # Run every tool call and send all results back in one turn
-            result_parts = []
-            for call in calls:
-                args = dict(call.args or {})
-                key = (call.name, json.dumps(args, sort_keys=True, default=str))
-                call_counts[key] = call_counts.get(key, 0) + 1
-                if call_counts[key] > MAX_SAME_CALL:
-                    result = REPEATED_CALL_RESULT
-                elif call.name == "create_return_request":
-                    result = self._prepare_return(args)
-                else:
-                    result = execute_tool(self.session, call.name, args)
-                reply.steps.append(Step(call.name, args, result))
-                result_parts.append(types.Part.from_function_response(name=call.name, response=result))
-            self.history.append(types.Content(role="user", parts=result_parts))
-
-        # Too many steps: close the turn with a safe message
-        reply.text, reply.stop_reason = MAX_STEPS_MESSAGE, "max_steps"
-        self.history.append(types.Content(role="model", parts=[types.Part.from_text(text=reply.text)]))
-        return reply
+    def _run_tool(self, name: str, args: dict) -> dict:
+        if name == "create_return_request":
+            return self._prepare_return(args)
+        return execute_tool(self.session, name, args)
 
     def _prepare_return(self, args: dict) -> dict:
         """Prepare a return request. The token stays here; the LLM only gets the summary."""
@@ -214,38 +104,3 @@ class SupportAgent:
             self.interface_note = (f"[Interface note] The return request for order "
                                    f"{pending.order_id} could not be created: {result.get('error')}.")
         return result
-
-    def _log(self, event: str, data: dict):
-        if self.log_path is not None:
-            write_event(self.log_path, {"event": event,
-                                        "session": "#" + hash_id(self.session.customer_unique_id), **data})
-
-    def _generate(self, reply: AgentReply):
-        """Call Gemini and time every call. Retry when it is busy (503), cancels (499) or times out.
-
-        Returns None on failure. Every attempt is recorded in reply.model_calls, so the
-        log shows where the time of a slow turn went.
-        """
-        for attempt in range(MAX_API_RETRIES + 1):
-            start = time.perf_counter()
-            call = {"latency_s": 0.0, "error": None}
-            reply.model_calls.append(call)
-            try:
-                response = self.client.models.generate_content(
-                    model=self.model, contents=self.history, config=self.config)
-                call["latency_s"] = round(time.perf_counter() - start, 2)
-                return response
-            except errors.APIError as e:
-                self.last_error = f"{e.code}: {e.message}"
-                # 5xx: Gemini is busy. 499: the call was cancelled on the server side (seen in
-                # the eval run, error analysis 8). 429 means the quota is used up: no retry.
-                retryable = isinstance(e, errors.ServerError) or e.code == 499
-            except Exception as e:   # timeout or network error
-                self.last_error = f"{type(e).__name__}: {e}"
-                retryable = True
-            call["latency_s"] = round(time.perf_counter() - start, 2)
-            call["error"] = self.last_error[:120]
-            if not retryable or attempt == MAX_API_RETRIES:
-                return None
-            time.sleep(5 * (attempt + 1))   # wait 5 s, then 10 s
-        return None
