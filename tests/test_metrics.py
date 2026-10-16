@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from config import DB_PATH
-from src.tools.metrics import list_metrics, load_semantic_layer, run_metric
+from src.tools.metrics import build_metric_sql, list_metrics, load_semantic_layer, run_metric
 
 SCHEMA = """
 CREATE TABLE customers (customer_id TEXT, customer_unique_id TEXT, customer_state TEXT);
@@ -133,6 +133,11 @@ class MetricsTest(unittest.TestCase):
         self.assertIn("HAVING", top["sql"])
         lowest = run_metric("cancel_rate", group_by=["customer_state"], sort="asc", limit=1, db_path=self.db)
         self.assertEqual(lowest["rows"], [["SP", 0.0, 2]])
+
+    def test_sorting_uses_the_unrounded_value(self):
+        # 0.08054 and 0.08046 are both shown as 0.0805; the order must still be right
+        built = build_metric_sql("late_delivery_rate", group_by=["product_category_en"], sort="desc")
+        self.assertIn("ORDER BY 1.0 * SUM", built[0])
 
     def test_threshold_options_are_checked(self):
         self.assertEqual(run_metric("gmv", min_n=10, db_path=self.db)["error"], "NEEDS_GROUP_BY")
