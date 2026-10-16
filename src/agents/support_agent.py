@@ -17,7 +17,8 @@ from src.tools.return_requests import PendingReturn, create_return_request, prep
 
 MAX_STEPS = 8          # model calls per customer message (G10)
 MAX_SAME_CALL = 2      # the same tool with the same arguments, at most twice (G10)
-MAX_API_RETRIES = 2    # extra attempts when Gemini is busy (503)
+MAX_API_RETRIES = 2    # extra attempts when Gemini is busy (503) or a call times out
+HTTP_TIMEOUT_S = 60    # one model call may take at most this long, then it counts as failed
 
 API_ERROR_MESSAGE = "Şu anda isteğinizi yanıtlayamıyorum. Lütfen birkaç dakika sonra tekrar deneyin."
 MAX_STEPS_MESSAGE = "Bu soruyu şu an yanıtlayamadım. İsterseniz talebinizi bir müşteri temsilcisine iletebilirim."
@@ -58,6 +59,7 @@ class AgentReply:
     output_tokens: int = 0
     stop_reason: str = "answer"   # answer | max_steps | api_error
     latency_s: float = 0.0
+    model_calls: list[dict] = field(default_factory=list)   # one entry per model call: time, tokens, error
 
 
 def make_client() -> genai.Client:
@@ -65,7 +67,9 @@ def make_client() -> genai.Client:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is missing. Copy .env.example to .env and add your key.")
-    return genai.Client(api_key=api_key)
+    # Without a timeout one slow call could hold a turn for minutes (error analysis 8)
+    return genai.Client(api_key=api_key,
+                        http_options=types.HttpOptions(timeout=HTTP_TIMEOUT_S * 1000))
 
 
 class SupportAgent:
@@ -101,6 +105,7 @@ class SupportAgent:
             "input_tokens": reply.input_tokens,
             "output_tokens": reply.output_tokens,
             "latency_s": reply.latency_s,
+            "model_calls": reply.model_calls,
             "stop_reason": reply.stop_reason,
         })
         return reply
@@ -117,7 +122,7 @@ class SupportAgent:
         call_counts: dict[tuple, int] = {}
 
         for _ in range(MAX_STEPS):
-            response = self._generate()
+            response = self._generate(reply)
             if response is None:
                 del self.history[start:]   # forget the failed turn
                 reply.text, reply.stop_reason = API_ERROR_MESSAGE, "api_error"
@@ -127,6 +132,8 @@ class SupportAgent:
             if usage is not None:
                 reply.input_tokens += usage.prompt_token_count or 0
                 reply.output_tokens += usage.candidates_token_count or 0
+                reply.model_calls[-1]["input_tokens"] = usage.prompt_token_count or 0
+                reply.model_calls[-1]["output_tokens"] = usage.candidates_token_count or 0
 
             candidate = response.candidates[0] if response.candidates else None
             if candidate is None or candidate.content is None:
@@ -212,16 +219,30 @@ class SupportAgent:
             write_event(self.log_path, {"event": event,
                                         "session": "#" + hash_id(self.session.customer_unique_id), **data})
 
-    def _generate(self):
-        """Call Gemini. Retry when it is busy (503). Returns None on failure."""
+    def _generate(self, reply: AgentReply):
+        """Call Gemini and time every call. Retry when it is busy (503) or times out.
+
+        Returns None on failure. Every attempt is recorded in reply.model_calls, so the
+        log shows where the time of a slow turn went.
+        """
         for attempt in range(MAX_API_RETRIES + 1):
+            start = time.perf_counter()
+            call = {"latency_s": 0.0, "error": None}
+            reply.model_calls.append(call)
             try:
-                return self.client.models.generate_content(
+                response = self.client.models.generate_content(
                     model=self.model, contents=self.history, config=self.config)
+                call["latency_s"] = round(time.perf_counter() - start, 2)
+                return response
             except errors.APIError as e:
                 self.last_error = f"{e.code}: {e.message}"
                 retryable = isinstance(e, errors.ServerError)   # 429 means the quota is used up
-                if not retryable or attempt == MAX_API_RETRIES:
-                    return None
-                time.sleep(5 * (attempt + 1))   # wait 5 s, then 10 s
+            except Exception as e:   # timeout or network error
+                self.last_error = f"{type(e).__name__}: {e}"
+                retryable = True
+            call["latency_s"] = round(time.perf_counter() - start, 2)
+            call["error"] = self.last_error[:120]
+            if not retryable or attempt == MAX_API_RETRIES:
+                return None
+            time.sleep(5 * (attempt + 1))   # wait 5 s, then 10 s
         return None
