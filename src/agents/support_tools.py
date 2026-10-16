@@ -4,6 +4,7 @@ from google.genai import types
 
 from src.knowledge.policies import search_policies
 from src.returns import VALID_REASONS
+from src.tools.escalation import PRIORITIES, escalate_to_human
 from src.tools.orders import Session, check_return_eligibility, get_order_status, list_customer_orders
 
 ORDER_STATUSES = ["created", "approved", "invoiced", "processing",
@@ -90,6 +91,24 @@ TOOL_DECLARATIONS = [
             "required": ["order_id", "reason"],
         },
     ),
+    types.FunctionDeclaration(
+        name="escalate_to_human",
+        description=(
+            "Hand the conversation to a human representative and get a ticket number. Use it when a "
+            "tool returns NEEDS_HUMAN, when the policies do not answer the question, when an order is "
+            "past its estimated delivery date but still in transit, or when the customer asks for a person."
+        ),
+        parameters_json_schema={
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string",
+                            "description": "One or two sentences about the problem, without personal data."},
+                "priority": {"type": "string", "enum": list(PRIORITIES),
+                             "description": "high only when the customer may lose money or the order seems lost."},
+            },
+            "required": ["summary"],
+        },
+    ),
 ]
 
 # Tools that change data. The agent runs these itself, behind customer approval (G1).
@@ -111,6 +130,8 @@ def execute_tool(session: Session, name: str, args: dict) -> dict:
                 {"title": h["title"], "section": h["section"], "text": h["text"], "score": h["score"]}
                 for h in hits
             ]}
+        if name == "escalate_to_human":
+            return escalate_to_human(session, args["summary"], args.get("priority", "normal"))
         if name in WRITE_TOOLS:   # never run here: the agent handles approval
             return {"error": "APPROVAL_REQUIRED", "message": "This tool needs customer approval."}
         return {"error": "UNKNOWN_TOOL", "message": f"There is no tool called '{name}'."}
