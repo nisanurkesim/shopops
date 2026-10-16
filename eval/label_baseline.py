@@ -21,12 +21,17 @@ LABELS = {
     "S9": "no",
     "S10": "no",
     "S11": "no",           # asked for the order number
+    "S12": "no",           # asked for the order number and the problem
+    "S13": "no",           # general damaged-item rule, correct; cannot see the missing delivery date
+    "S14": "no",           # general damaged-item rule, correct; cannot see the open request
+    "S15": "no",           # correct rules, but left out the freight-only claim up to day 30
     "P1": "no",
     "P2": "no",
     "P3": "no",
     "P4": "no",
     "P5": "no",            # matches late_delivery.md word for word
     "P6": "no",
+    "P7": "no",            # said it is not in the policies and will be forwarded (see O1-O3)
     "A1": "yes-order",     # said "not found" without seeing data; same answer the owner got in S1
     "A2": "no",
     "A3": "no",
