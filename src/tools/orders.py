@@ -35,6 +35,8 @@ DECISION_TEXT = {
     NEEDS_HUMAN: "Bu sipariş için kararı bir temsilci vermeli",
     DUPLICATE_REQUEST: "Bu sipariş için zaten bir iade talebi var",
 }
+# Outside the window but 10+ days late: the freight can still be refunded (R9, error analysis 9)
+FREIGHT_ONLY_TEXT = "İade süresi geçmiş; ürün geç geldiği için yalnızca kargo ücreti için talep açılabilir"
 APPROVAL_TEXT = {
     PENDING_REVIEW: "Temsilci onayı bekleyecek",
     PENDING_SENIOR: "Kıdemli temsilci onayı bekleyecek",
@@ -218,6 +220,8 @@ def check_return_eligibility(session: Session, order_id: str, reason: str,
     result = {"order_id": order_id, "order_ref": order_ref(order_id), "reason": reason,
               **asdict(decision), "currency": CURRENCY,
               "decision_text": DECISION_TEXT.get(decision.code, decision.code)}
+    if decision.code == NOT_ELIGIBLE_WINDOW and decision.refund_amount > 0:
+        result["decision_text"] = FREIGHT_ONLY_TEXT
     if decision.approval_level:
         result["approval_text"] = APPROVAL_TEXT[decision.approval_level]
     if decision.code == IN_TRANSIT:
