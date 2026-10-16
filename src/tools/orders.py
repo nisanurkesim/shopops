@@ -9,7 +9,8 @@ from pathlib import Path
 
 from config import DB_PATH
 from src.returns import (
-    NOT_FOUND, TODAY, Item, OrderFacts, Payment,
+    ALREADY_CLOSED, DUPLICATE_REQUEST, ELIGIBLE, IN_TRANSIT, NEEDS_HUMAN, NOT_DELIVERED_CANCELLABLE,
+    NOT_ELIGIBLE_WINDOW, NOT_FOUND, PENDING_REVIEW, PENDING_SENIOR, TODAY, Item, OrderFacts, Payment,
     check_return_eligibility as run_return_rules,
 )
 
@@ -17,6 +18,27 @@ from src.returns import (
 NOT_FOUND_MESSAGE = "Bu numarayla size ait bir sipariş bulunamadı."
 MAX_LIST_LIMIT = 20
 CURRENCY = "BRL"   # Olist prices are in Brazilian real
+ORDER_REF_CHARS = 8   # short order number shown to the customer
+
+# Turkish text next to every code, so the agent does not show codes to the customer
+STATUS_TEXT = {
+    "created": "Oluşturuldu", "approved": "Onaylandı", "invoiced": "Faturalandı",
+    "processing": "Hazırlanıyor", "shipped": "Kargoda", "delivered": "Teslim edildi",
+    "canceled": "İptal edildi", "unavailable": "Ürün temin edilemedi",
+}
+DECISION_TEXT = {
+    ELIGIBLE: "İade edilebilir",
+    NOT_ELIGIBLE_WINDOW: "İade süresi geçmiş",
+    IN_TRANSIT: "Sipariş henüz teslim edilmedi; iade teslimden sonra açılabilir",
+    NOT_DELIVERED_CANCELLABLE: "Sipariş henüz kargoya verilmedi; iade yerine iptal edilebilir",
+    ALREADY_CLOSED: "Sipariş iptal edilmiş veya kapanmış; iade talebi açılamaz",
+    NEEDS_HUMAN: "Bu sipariş için kararı bir temsilci vermeli",
+    DUPLICATE_REQUEST: "Bu sipariş için zaten bir iade talebi var",
+}
+APPROVAL_TEXT = {
+    PENDING_REVIEW: "Temsilci onayı bekleyecek",
+    PENDING_SENIOR: "Kıdemli temsilci onayı bekleyecek",
+}
 
 
 @dataclass(frozen=True)
@@ -107,6 +129,16 @@ def not_found() -> dict:
     return {"error": NOT_FOUND, "message": NOT_FOUND_MESSAGE}
 
 
+def order_ref(order_id: str) -> str:
+    """The short order number the agent writes in its answer."""
+    return order_id[:ORDER_REF_CHARS]
+
+
+def is_past_estimate(status: str, estimated: date | None) -> bool:
+    """Still in transit although the estimated delivery date has passed (prompt rule 6)."""
+    return status == "shipped" and estimated is not None and estimated < TODAY
+
+
 # ---------------------------------------------------------------------------
 # Tools
 # ---------------------------------------------------------------------------
@@ -119,18 +151,15 @@ def get_order_status(session: Session, order_id: str, db_path: Path = DB_PATH) -
         return not_found()
 
     status, delivered = customer_view(facts.status, facts.delivered_date)
-    past_estimate = (
-        status == "shipped"
-        and facts.estimated_date is not None
-        and facts.estimated_date < TODAY
-    )
     return {
         "order_id": facts.order_id,
+        "order_ref": order_ref(facts.order_id),
         "status": status,
+        "status_text": STATUS_TEXT.get(status, status),
         "purchase_date": iso(facts.purchase_date),
         "estimated_delivery_date": iso(facts.estimated_date),
         "delivered_date": iso(delivered),
-        "past_estimated_date": past_estimate,   # still shipped after the estimate: suggest support
+        "past_estimated_date": is_past_estimate(status, facts.estimated_date),
         "item_count": len(facts.items),
         "items_total": round(sum(i.price for i in facts.items), 2),
         "freight_total": round(sum(i.freight_value for i in facts.items), 2),
@@ -164,7 +193,9 @@ def list_customer_orders(session: Session, limit: int = 5, status: str | None = 
             continue
         orders.append({
             "order_id": r["order_id"],
+            "order_ref": order_ref(r["order_id"]),
             "status": shown_status,
+            "status_text": STATUS_TEXT.get(shown_status, shown_status),
             "purchase_date": iso(to_date(r["order_purchase_timestamp"])),
             "item_count": r["item_count"],
             "items_total": round(r["items_total"], 2),
@@ -183,4 +214,14 @@ def check_return_eligibility(session: Session, order_id: str, reason: str,
         return {"error": "INVALID_REASON", "message": str(e)}
     if decision.code == NOT_FOUND:
         return not_found()   # do not reveal whether it was R0 or R1
-    return {"order_id": order_id, "reason": reason, **asdict(decision), "currency": CURRENCY}
+
+    result = {"order_id": order_id, "order_ref": order_ref(order_id), "reason": reason,
+              **asdict(decision), "currency": CURRENCY,
+              "decision_text": DECISION_TEXT.get(decision.code, decision.code)}
+    if decision.approval_level:
+        result["approval_text"] = APPROVAL_TEXT[decision.approval_level]
+    if decision.code == IN_TRANSIT:
+        # The return tool must also say when a parcel looks lost (error analysis 4)
+        status, _ = customer_view(facts.status, facts.delivered_date)
+        result["past_estimated_date"] = is_past_estimate(status, facts.estimated_date)
+    return result

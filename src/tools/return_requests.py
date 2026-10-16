@@ -11,7 +11,7 @@ from pathlib import Path
 
 from config import DB_PATH, SIMULATED_TODAY
 from src.returns import ELIGIBLE, NOT_ELIGIBLE_WINDOW
-from src.tools.orders import CURRENCY, Session, check_return_eligibility
+from src.tools.orders import APPROVAL_TEXT, CURRENCY, Session, check_return_eligibility, order_ref
 
 APPROVAL_REQUIRED = "APPROVAL_REQUIRED"
 
@@ -30,10 +30,12 @@ class PendingReturn:
         """What the LLM and the customer may see. No token."""
         return {
             "order_id": self.order_id,
+            "order_ref": order_ref(self.order_id),
             "reason": self.reason,
             "refund_amount": self.refund_amount,
             "currency": CURRENCY,
             "approval_level": self.status,
+            "approval_text": APPROVAL_TEXT[self.status],
         }
 
 
