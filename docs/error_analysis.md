@@ -65,3 +65,9 @@ Used later for the README and the blog post. "Result" lines refer to the eval ru
 - Cause (P5): not clear. The rule is a combination ("window passed" and "10+ days late" and "30 days not passed"), and the model shortened it wrongly. One run, so it may not repeat.
 - Fix (S15): when the window has passed but there is a freight refund, `decision_text` now says so ("İade süresi geçmiş; ürün geç geldiği için yalnızca kargo ücreti için talep açılabilir"), tested in `tests/test_tool_texts.py`.
 - Result: to be measured in the next eval run. P5 has no code fix yet.
+
+## 10. Ops agent: its own SQL counted items instead of orders
+- What happened: first terminal test of the Ops Data Agent (2026-10-16). Question: "En az 100 siparişi olan kategoriler arasında geç teslim oranı en yüksek 5'i hangileri?" No metric could do "at least 100" and "top 5", so the agent wrote its own SQL. It joined `order_items` and divided `SUM(late)` over item rows by `COUNT(DISTINCT order_id)`. An order with several items was counted several times above the line and once below it, so the rates were too high and 4 of the 5 categories were wrong (for example christmas_supplies 12.00% and office_furniture 10.61% in the list; the correct top 5 is audio 11.78%, home_confort 9.44%, fashion_underwear_beach 9.40%, books_technical 8.20%, baby 8.05%).
+- Cause: the official definition counts distinct order-category pairs. Free SQL does not have to follow it, and the validator only checks safety, not meaning.
+- Fix: `run_metric` can now keep groups with at least `min_n` orders, sort them and keep the first `limit` rows, so these questions use the semantic layer. The prompt says to use `run_sql` only when no metric fits, and warns about joins that repeat an order.
+- Result: `run_metric("late_delivery_rate", group_by=["product_category_en"], min_n=100, sort="desc", limit=5)` returns the correct top 5. The agent's choice is to be measured with the ops cases in the golden set (Sprint 4).
