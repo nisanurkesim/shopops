@@ -6,6 +6,7 @@ from unittest import mock
 
 from google.genai import errors
 
+import src.agents.base as base
 import src.agents.support_agent as support_agent
 from src.tools.orders import Session
 
@@ -34,7 +35,7 @@ class FakeClient:
 class ModelCallTest(unittest.TestCase):
 
     def setUp(self):
-        patcher = mock.patch.object(support_agent.time, "sleep")   # do not really wait
+        patcher = mock.patch.object(base.time, "sleep")   # do not really wait
         patcher.start()
         self.addCleanup(patcher.stop)
 
