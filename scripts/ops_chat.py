@@ -5,9 +5,9 @@ from pathlib import Path
 
 # Let this script import config.py and src/ from the project root
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from scripts.chat import hide_ids, short
 from src.agents.ops_agent import OpsAgent
 from src.agents.trace import LOG_PATH
+from src.display import step_text
 
 
 def main():
@@ -27,8 +27,7 @@ def main():
 
         reply = agent.ask(message)
         for step in reply.steps:
-            args = step.args.get("query") or step.args
-            print(f"  [tool] {step.tool}({hide_ids(str(args))}) -> {short(step.result, 200)}")
+            print(f"  [tool] {step_text(step, 200)}")
         print(f"Asistan: {reply.text}")
         print(f"  ({len(reply.steps)} tool calls, {reply.input_tokens} input / "
               f"{reply.output_tokens} output tokens, {reply.latency_s} s, stop: {reply.stop_reason})")

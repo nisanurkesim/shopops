@@ -31,7 +31,8 @@ ORDER BY o.order_id
 """
 
 
-def main(db_path: Path = DB_PATH):
+def find_demo_customer(db_path: Path = DB_PATH) -> str | None:
+    """A customer for the return demo, or None when no customer matches."""
     cases = [json.loads(line) for line in GOLDEN_PATH.read_text(encoding="utf-8").splitlines() if line.strip()]
     used_orders = {c["order_id"] for c in cases if c.get("order_id")}
     used_customers = {c["session_customer"] for c in cases if c.get("session_customer")}
@@ -41,9 +42,15 @@ def main(db_path: Path = DB_PATH):
     con.close()
     for customer, order_id in rows:
         if order_id not in used_orders and customer not in used_customers:
-            print(customer)
-            return
-    raise SystemExit("No customer matches the demo conditions.")
+            return customer
+    return None
+
+
+def main(db_path: Path = DB_PATH):
+    customer = find_demo_customer(db_path)
+    if customer is None:
+        raise SystemExit("No customer matches the demo conditions.")
+    print(customer)
 
 
 if __name__ == "__main__":

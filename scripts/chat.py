@@ -1,7 +1,5 @@
 # Chat with the Support Agent in the terminal
 # Usage: python scripts\chat.py [customer_unique_id]
-import json
-import re
 import sys
 from pathlib import Path
 
@@ -9,32 +7,11 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from src.agents.support_agent import SupportAgent
 from src.agents.trace import LOG_PATH
+from src.display import approval_lines, confirmation_text, step_text
 from src.tools.orders import Session
 
 # Demo customer with 17 orders (the logged-in user of this session)
 DEFAULT_CUSTOMER = "8d50f5eadf50201ccdcedfb9e2ac8455"
-
-# What the customer sees in the approval summary instead of the reason codes
-REASON_LABELS = {
-    "changed_mind": "Fikir değiştirme",
-    "damaged": "Hasarlı ürün",
-    "wrong_item": "Yanlış ürün",
-    "late": "Geç teslimat",
-}
-
-
-# Full 32-character ids are shortened on screen, so screenshots show no raw id
-FULL_ID = re.compile(r"\b([0-9a-f]{8})[0-9a-f]{24}\b")
-
-
-def hide_ids(text: str) -> str:
-    """'a1a6eadae352582010f449d8527b55f3' -> 'a1a6eada...'"""
-    return FULL_ID.sub(r"\1...", text)
-
-
-def short(result: dict, limit: int = 150) -> str:
-    text = hide_ids(json.dumps(result, ensure_ascii=False))
-    return text if len(text) <= limit else text[:limit] + "..."
 
 
 def main():
@@ -55,7 +32,7 @@ def main():
 
         reply = agent.ask(message)
         for step in reply.steps:
-            print(f"  [tool] {step.tool}({hide_ids(str(step.args))}) -> {short(step.result)}")
+            print(f"  [tool] {step_text(step)}")
         print(f"Asistan: {reply.text}")
         print(f"  ({len(reply.steps)} tool calls, {reply.input_tokens} input / "
               f"{reply.output_tokens} output tokens, stop: {reply.stop_reason})")
@@ -68,22 +45,14 @@ def main():
 
 def ask_for_approval(agent: SupportAgent):
     """Human approval (G1): the summary comes from the code, the answer from the keyboard."""
-    s = agent.pending.summary()
-    level = "kıdemli temsilci onayı" if s["approval_level"] == "PENDING_SENIOR" else "temsilci onayı"
     print("\n  --- İade talebi özeti ---")
-    print(f"  Sipariş: {s['order_id'][:8]}   Sebep: {REASON_LABELS.get(s['reason'], s['reason'])}")
-    print(f"  İade tutarı: {s['refund_amount']:.2f} {s['currency']}   Sonraki adım: {level}")
+    for line in approval_lines(agent.pending.summary()):
+        print(f"  {line}")
     try:
         answer = input("  Bu talebi oluşturmayı onaylıyor musunuz? [e/h]: ").strip().lower()
     except (EOFError, KeyboardInterrupt):
         answer = ""   # no answer is not an approval
-    result = agent.confirm_return(answer == "e")
-    if "return_request_id" in result:
-        print(f"  Talep oluşturuldu. Talep numarası: {result['return_request_id']}")
-    elif result.get("status") == "CANCELLED_BY_CUSTOMER":
-        print("  Talep oluşturulmadı.")
-    else:
-        print(f"  Talep oluşturulamadı ({result.get('error')}).")
+    print(f"  {confirmation_text(agent.confirm_return(answer == 'e'))}")
 
 
 if __name__ == "__main__":
