@@ -1,6 +1,7 @@
 # Chat with the Support Agent in the terminal
 # Usage: python scripts\chat.py [customer_unique_id]
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -22,8 +23,17 @@ REASON_LABELS = {
 }
 
 
+# Full 32-character ids are shortened on screen, so screenshots show no raw id
+FULL_ID = re.compile(r"\b([0-9a-f]{8})[0-9a-f]{24}\b")
+
+
+def hide_ids(text: str) -> str:
+    """'a1a6eadae352582010f449d8527b55f3' -> 'a1a6eada...'"""
+    return FULL_ID.sub(r"\1...", text)
+
+
 def short(result: dict, limit: int = 150) -> str:
-    text = json.dumps(result, ensure_ascii=False)
+    text = hide_ids(json.dumps(result, ensure_ascii=False))
     return text if len(text) <= limit else text[:limit] + "..."
 
 
@@ -45,7 +55,7 @@ def main():
 
         reply = agent.ask(message)
         for step in reply.steps:
-            print(f"  [tool] {step.tool}({step.args}) -> {short(step.result)}")
+            print(f"  [tool] {step.tool}({hide_ids(str(step.args))}) -> {short(step.result)}")
         print(f"Asistan: {reply.text}")
         print(f"  ({len(reply.steps)} tool calls, {reply.input_tokens} input / "
               f"{reply.output_tokens} output tokens, stop: {reply.stop_reason})")
