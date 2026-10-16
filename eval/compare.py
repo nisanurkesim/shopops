@@ -47,6 +47,51 @@ def in_group(rows: list[dict], group: str) -> list[dict]:
     return [r for r in rows if r["group"] == group]
 
 
+def ops_section(final: list[dict], b2: list[dict]) -> list[str]:
+    """B2 (raw schema text-to-SQL) against the Ops Data Agent (semantic layer)."""
+    if not final and not b2:
+        return []
+    passed = lambda r: r["match"] == "pass"
+
+    def split(rows):
+        done = [r for r in rows if r["answer"] and not r["error"]]
+        return [r for r in done if r["id"] != "O9"], [r for r in done if r["id"] == "O9"]
+
+    f_sql, f_attack = split(final)
+    b_sql, b_attack = split(b2)
+    lines = [
+        "",
+        "## Ops Data Agent",
+        "",
+        "Ops cases O1-O8 have a hand-written golden SQL (`eval/make_golden_set.py`, checked against",
+        "`run_metric`). Execution match: the rows of the agent's last query must contain the golden",
+        "values, numbers correctly rounded, in order when the question asks for a ranking",
+        "(`eval/ops_match.py`). O9 is an SQL injection: nothing but a SELECT may run.",
+        "B2 is the same loop with only `run_sql` and the raw CREATE TABLE schema (brief 9.3).",
+        "",
+        "| | B2 (raw schema) | Ops Data Agent |",
+        "|---|---|---|",
+        f"| SQL execution accuracy (O1-O8) | {share(b_sql, passed)} | {share(f_sql, passed)} |",
+        f"| tool-call accuracy (right metric, or run_sql when none fits) | - "
+        f"| {share(f_sql, lambda r: r['tool_check'] == 'pass')} |",
+        f"| SQL attack blocked (O9) | {share(b_attack, passed)} | {share(f_attack, passed)} |",
+    ]
+    if b_sql and f_sql:
+        lines += [
+            f"| input tokens (mean) | {mean(b_sql, 'input_tokens'):.0f} | {mean(f_sql, 'input_tokens'):.0f} |",
+            f"| latency in seconds (median) | {statistics.median(float(r['latency_s']) for r in b_sql):.1f} "
+            f"| {statistics.median(float(r['latency_s']) for r in f_sql):.1f} |",
+        ]
+    lines.append("")
+    if b_sql and f_sql:
+        gain = 100 * (sum(map(passed, f_sql)) / len(f_sql) - sum(map(passed, b_sql)) / len(b_sql))
+        lines.append(f"Contribution of the semantic layer (agent minus B2): {gain:+.0f} points on {len(f_sql)} cases.")
+    failed = [f"{r['system']} {r['id']}" for r in b_sql + f_sql if not passed(r)]
+    if failed:
+        lines.append(f"Failed: {', '.join(failed)}. Reasons are in `docs/error_analysis.md`.")
+    return lines
+
+
 def main():
     b0 = read("baseline.csv")
     agent = read("agent.csv")
@@ -65,8 +110,8 @@ def main():
         f"Golden set: {len(b0)} cases ({counts}, {len(in_group(b0, 'ops'))} ops).",
         f"Model `{agent[0]['model']}`, temperature {temperature}, for B0 and the agent.",
         "B0 is one LLM call with the policy texts in the prompt and no tools. The agent uses",
-        "the order tools, the policy search and the rule engine. Ops cases need the Ops Data",
-        "Agent (Sprint 4), so the agent is not measured on them yet.",
+        "the order tools, the policy search and the rule engine. Ops questions are answered by",
+        "the Ops Data Agent and measured separately (see Ops Data Agent below).",
         "",
         f"The agent was measured twice: before the fixes in `docs/error_analysis.md` "
         f"({len(before)} cases) and after them ({len(agent)} cases, 5 of them new).",
@@ -86,7 +131,7 @@ def main():
                      f"| {share(in_group(agent, group), hallucinated)} |")
     lines.append(f"| **total** | **{share(b0_main, hallucinated)}** | **{share(before, hallucinated)}** "
                  f"| **{share(agent, hallucinated)}** |")
-    lines.append(f"| ops | {share(in_group(b0, 'ops'), hallucinated)} | Sprint 4 | Sprint 4 |")
+    lines.append(f"| ops | {share(in_group(b0, 'ops'), hallucinated)} | see below | see below |")
 
     blind = [r for r in b0 if r["id"] in B0_BLIND_CASES and not hallucinated(r)]
     lines += [
@@ -148,6 +193,8 @@ def main():
             "- `tests/test_indirect_injection.py` uses a fake model that obeys the attack: the code "
             "still writes nothing, because only the customer's answer in the interface can approve.",
         ]
+
+    lines += ops_section(read("ops_final.csv"), read("ops_b2.csv"))
 
     tool_calls = [len(r["tools"].split("; ")) if r["tools"] else 0 for r in agent]
     lines += [
