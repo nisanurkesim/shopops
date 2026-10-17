@@ -159,6 +159,9 @@ def build_database(db_path: Path = DB_PATH, sample: float | None = None):
         with con:
             apply_sample(con, keep)
         con.execute("VACUUM")   # give back the space of the removed rows: smaller file
+        # Mark the file as a sample (percent of customers kept). user_version is a number in
+        # the file header, not a table, so the agents and their SQL never see it.
+        con.execute(f"PRAGMA user_version = {round(sample * 100)}")
         print(f"Sample: {len(keep):,} customers kept ({sample:.0%}, seed {SAMPLE_SEED})")
         for label, customer in [("A", DEMO_CUSTOMER_A), ("B", customer_b)]:
             n = con.execute("SELECT COUNT(*) FROM customers WHERE customer_unique_id = ?",

@@ -1,11 +1,13 @@
 # Project settings, kept in one place
+import os
 from pathlib import Path
 
 # Folder that contains this file (the project root)
 PROJECT_ROOT = Path(__file__).resolve().parent
 
-# Local SQLite database built from the Olist CSV files
-DB_PATH = PROJECT_ROOT / "data" / "shopops.db"
+# Local SQLite database built from the Olist CSV files. SHOPOPS_DB_PATH can point the
+# app at another file, e.g. to try the demo server's first start without touching this one.
+DB_PATH = Path(os.environ.get("SHOPOPS_DB_PATH", PROJECT_ROOT / "data" / "shopops.db")).resolve()
 
 # Kaggle dataset id for Olist
 OLIST_DATASET = "olistbr/brazilian-ecommerce"
