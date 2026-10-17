@@ -20,6 +20,7 @@ from scripts.demo_customer import find_demo_customer
 from scripts.load_sqlite import build_database
 from src.agents.mcp_orders import McpOrders
 from src.agents.ops_agent import OpsAgent
+from src.agents.router import Router
 from src.agents.support_agent import SupportAgent
 from src.agents.trace import LOG_PATH
 from src.display import approval_lines, confirmation_text, hide_ids, last_table, step_text
@@ -50,6 +51,10 @@ SAMPLE_QUESTIONS = {
 # SHOPOPS_MAX_QUESTIONS can set a smaller number to try the limit without using the quota.
 MAX_QUESTIONS = int(os.environ.get("SHOPOPS_MAX_QUESTIONS", 15))
 REPO_URL = "https://github.com/nisanurkesim/shopops"
+
+# Session type of each role, for the router. It comes from the login step (here: the
+# role chosen in the sidebar), never from the message.
+SESSION_TYPES = {"Müşteri": "customer", "Operasyon": "ops"}
 
 # Emoji are only in what the visitor sees; the code keeps comparing the plain role names
 ROLE_LABELS = {"Müşteri": "🛍️ Müşteri", "Operasyon": "📊 Operasyon"}
@@ -155,17 +160,34 @@ def get_agent(key: str, role: str, customer: str | None):
     return agents[key]
 
 
+def get_router() -> Router:
+    """One router per browser session."""
+    if "router" not in st.session_state:
+        st.session_state["router"] = Router(log_path=LOG_PATH)
+    return st.session_state["router"]
+
+
 def send(agent, chat: list, text: str, role: str):
+    previous = next((m["text"] for m in reversed(chat) if m["role"] == "assistant"), None)
     chat.append({"role": "user", "text": text})
     show_message(chat[-1])   # the question stays on screen while the agent works
     with st.spinner("Asistan çalışıyor... Ücretsiz katmanda bu 10-60 saniye sürebilir."):
-        reply = agent.ask(text)
+        # The router decides first; the session's agent only runs when the session may ask this
+        route = get_router().route(text, SESSION_TYPES[role], previous)
+        reply = agent.ask(text) if route.allowed else None
+    route_line = f"router -> {route.intent}" + ("" if route.allowed else " (bu oturumda izin yok)")
+    if reply is None:
+        chat.append({"role": "assistant", "text": route.message, "steps": [route_line],
+                     "meta": f"0 tool çağrısı · {route.input_tokens} input / {route.output_tokens} "
+                             f"output token · {route.latency_s} sn"})
+        return
     message = {
         "role": "assistant",
         "text": hide_ids(reply.text),
-        "steps": [step_text(s, 300) for s in reply.steps],
-        "meta": f"{len(reply.steps)} tool çağrısı · {reply.input_tokens} input / {reply.output_tokens} "
-                f"output token · {reply.latency_s} sn",
+        "steps": [route_line] + [step_text(s, 300) for s in reply.steps],
+        "meta": f"{len(reply.steps)} tool çağrısı · {reply.input_tokens + route.input_tokens} input / "
+                f"{reply.output_tokens + route.output_tokens} output token · "
+                f"{round(reply.latency_s + route.latency_s, 2)} sn",
     }
     if role == "Operasyon":
         message["table"] = last_table(reply.steps)
