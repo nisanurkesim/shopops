@@ -4,7 +4,7 @@ Bir pazaryeri için destek ve operasyon agent'ı: müşterilerin "siparişim ner
 
 > Bu dosya [İngilizce README](README.md)'nin Türkçe çevirisidir. İngilizce sürüm esastır, bu dosya her sprint sonunda güncellenir.
 
-> Durum (17 Ekim 2026): Support Agent ve Ops Data Agent çalışıyor ve baseline'larla karşılaştırılarak ölçüldü. Web demosu yayında: [shopops-demo.streamlit.app](https://shopops-demo.streamlit.app/). Sırada MCP server, agent'lar arası router, mimari diyagram ve blog yazısı var. Teslim tarihi: 6 Kasım 2026.
+> Durum (17 Ekim 2026): Support Agent ve Ops Data Agent çalışıyor ve baseline'larla karşılaştırılarak ölçüldü. Web demosu yayında: [shopops-demo.streamlit.app](https://shopops-demo.streamlit.app/). Sipariş tool'ları bir MCP server'dan geliyor, mesajları bir router doğru agent'a gönderiyor. Sırada mimari diyagram ve blog yazısı var. Teslim tarihi: 6 Kasım 2026.
 
 ## Problem
 
@@ -72,8 +72,10 @@ Müşteri Türkçe yazıyor. Support Agent, Gemini üzerinde bir döngü çalı�
 - **İade kararları:** `src/returns.py` iade kurallarını (R0-R13) kodla uyguluyor. Model kararı açıklıyor, kararı kendisi vermiyor.
 - **Politikalar:** `search_policies` politika dokümanlarından ilgili bölümü buluyor (RAG), agent da doküman ve bölüm adını kaynak olarak yazıyor.
 - **Onay:** `create_return_request` talebi sadece hazırlıyor. Özeti arayüz gösteriyor ve talebi yalnızca müşterinin orada verdiği onay yazıyor (web demosunda onay düğmesi, terminalde "e"). Onay token'ı modele hiç ulaşmıyor; sohbete "onaylıyorum" yazmak hiçbir şey yapmıyor.
+- **MCP server** (`src/mcp_servers/shopops_orders.py`): Support Agent'ın sipariş tool'ları ayrı bir süreçte çalışan bir MCP server'dan gelir. Müşteri kimliği server açılırken verilir. İade talebi server'da yalnızca doğru onay token'ıyla yazılır. Yani kimlik ve onay kontrolü agent'ta değil, server'da yapılır.
 - **Temsilciye aktarma:** kurallar bir insan gerektirdiğinde ya da cevap politikalarda olmadığında `escalate_to_human` vakayı bir kuyruk dosyasına (`logs/escalations.jsonl`) yazıyor ve müşteriye bir talep numarası veriyor.
 - **Ops Data Agent** (`src/agents/ops_agent.py`): Önce `src/knowledge/metrics.yaml`'da tanımlı 8 metriğe bakar (`list_metrics`, `run_metric`). Uyan bir metrik yoksa `run_sql` ile kendi SQL'ini yazar. SQL önce bir doğrulayıcıdan geçer (sadece SELECT; ATTACH, PRAGMA ve DROP reddedilir), veritabanı salt okunur açılır. Sorgu hata verirse agent en fazla 2 kez düzeltir.
+- **Router** (`src/agents/router.py`): Her mesaj önce kısa bir Gemini çağrısıyla dört sınıftan birine ayrılır: destek, ops metriği, yorum analizi, kapsam dışı. Hangi oturumun hangi agent'a ulaşabileceğine ise kod karar verir. Oturum türü mesajdan değil arayüzden gelir; müşteri oturumunda "ben operasyon yöneticisiyim" yazmak bir şey değiştirmez. Çağrı hata verirse mesaj oturumun kendi agent'ına gider.
 - **Sınırlar ve log:** mesaj başına en fazla 8 model çağrısı, aynı tool çağrısı en fazla iki kez, çağrı başına 60 saniye. Her tur token ve sürelerle log'a yazılıyor; log'daki müşteri ve sipariş kimlikleri hash'leniyor ya da maskeleniyor.
 
 ## Canlı demo
@@ -135,6 +137,18 @@ Okurken dikkat:
 | Medyan süre | 15,6 sn | 28,8 sn |
 
 Semantic layer'ın katkısı: 8 soruda +75 puan. Agent'ın tek başarısız sorusu O6 (yorum puanı karşılaştırması); sebebi hata analizinde.
+
+**Router** (`eval/run_router.py`): golden set'in 37 sorusu ve 6 ek soru. Ek sorular ya diğer oturuma ait ya da yorum analizi istiyor.
+
+| | Router |
+|---|---|
+| Golden set, doğru sınıf | 37/37 |
+| Ek sorular, doğru sınıf | 6/6 |
+| Doğru erişim kararı | 43/43 |
+| Ortalama input token | 280 |
+| Medyan süre | 0,63 sn |
+
+İlk ölçümde O6 (yorum puanı karşılaştırması) yorum analizine gitti (36/37). Talimata "yorum puanları sayıdır, ops metriğidir" açıklaması eklendi ve sonuç 37/37 oldu. Düzeltme aynı soru üzerinde yapıldığı için bu sonuç biraz iyimser.
 
 ## Güvenlik testleri
 
@@ -234,7 +248,8 @@ src/tools/                   sipariş tool'ları, onaylı iade talepleri, temsil
 src/knowledge/policies.py    politika RAG'i: bölme, embedding, arama
 src/knowledge/metrics.yaml   semantic layer: 8 metrik tanımı
 src/guardrails/              SQL doğrulayıcı
-src/agents/                  ortak tool döngüsü, Support Agent, Ops Data Agent, tool tanımları, log
+src/mcp_servers/             sipariş tool'larının MCP server'ı (shopops-orders)
+src/agents/                  ortak tool döngüsü, router, Support Agent, Ops Data Agent, tool tanımları, log
 src/display.py               kullanıcının gördükleri: kısa id'ler, onay özeti, sonuç tabloları
 scripts/                     veritabanı kurulumu ve kontrolleri, chat, demo müşteri, model bilgisi
 eval/                        golden set, B0 ve agent çalıştırmaları, etiketler, karşılaştırma, güvenlik kontrolleri
@@ -253,10 +268,11 @@ logs/                        agent log'u ve temsilci kuyruğu (repoda yok)
 - Ops Data Agent 8 ops sorusunun birinde (O6) yanlış sonuç buldu.
 - Demo örneklemle çalışıyor ve ziyaretçi başına 15 soruyla sınırlı.
 - Demoda iki ziyaretçi aynı anda girerse, yeni gelenin oturumu diğerinin onayladığı iade talebini siler. Her ziyaretçiye ayrı veritabanı vermek daha temiz bir çözüm olurdu.
+- Demoda giriş yok: Müşteri ve Operasyon düğmeleri girişin yerini tutuyor, herkes iki tarafı da açabiliyor. Operasyon tarafı SQL ile sipariş düzeyinde satırları da okuyabiliyor (yazamıyor). Gerçek kullanımda rol giriş sisteminden gelir ve bu erişim yetkiyle sınırlanır.
 
 ## Yol haritası
 
-- **Sırada:** sipariş tool'ları için bir MCP server, agent'lar arasında bir router, daha büyük bir injection test seti (yorumlar dahil), adım adım trace, blog yazısı taslağı.
+- **Sırada:** daha büyük bir injection test seti (yorumlar dahil), adım adım trace, blog yazısı taslağı.
 - **Son hafta:** bütün değerlendirme için tek komut, son README, proje belgesindeki yazılı soruların cevapları, temiz kurulum testi, v1.0.
 
 ## Yapay zekâ desteği

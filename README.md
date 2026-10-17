@@ -5,7 +5,7 @@ A support and operations agent for a marketplace: it answers customers' "where i
 
 Türkçe: [README.tr.md](README.tr.md)
 
-> Status (17 October 2026): the Support Agent and the Ops Data Agent work and are measured against baselines. The web demo is live: [shopops-demo.streamlit.app](https://shopops-demo.streamlit.app/). The MCP server, a router between the agents, the architecture diagram and the blog post come next. Deadline: 6 November 2026.
+> Status (17 October 2026): the Support Agent and the Ops Data Agent work and are measured against baselines. The web demo is live: [shopops-demo.streamlit.app](https://shopops-demo.streamlit.app/). The order tools come from an MCP server, and a router sends each message to the right agent. The architecture diagram and the blog post come next. Deadline: 6 November 2026.
 
 ## Problem
 
@@ -73,8 +73,10 @@ The customer writes in Turkish. The Support Agent runs a loop on Gemini: the mod
 - **Return decisions:** `src/returns.py` applies the return rules (R0-R13) in code. The model explains the decision; it does not make it.
 - **Policies:** `search_policies` finds the relevant section of the policy documents (RAG), and the agent cites the document and section.
 - **Approval:** `create_return_request` only prepares a request. The summary is shown by the interface, and only the customer's approval there (the button in the web demo, "e" in the terminal) writes the request. The approval token never reaches the model, so "I approve" typed into the chat does nothing.
+- **MCP server** (`src/mcp_servers/shopops_orders.py`): the Support Agent's order tools come from an MCP server that runs as a separate process. The customer id is given when the server starts, and the server writes a return request only with the right approval token. So identity and approval are checked in the server, not in the agent.
 - **Handover:** `escalate_to_human` puts the case in a queue file (`logs/escalations.jsonl`) and gives the customer a ticket number, when the rules need a person or the answer is not in the policies.
 - **Ops Data Agent** (`src/agents/ops_agent.py`): first looks at the 8 metrics defined in `src/knowledge/metrics.yaml` (`list_metrics`, `run_metric`). If none fits, it writes its own SQL with `run_sql`. The SQL goes through a validator first (SELECT only; ATTACH, PRAGMA and DROP are refused) and the database is opened read-only. If a query fails, the agent corrects it at most twice.
+- **Router** (`src/agents/router.py`): every message first goes through a short Gemini call that puts it into one of four classes: support, ops metric, review analysis, out of scope. Which session may reach which agent is decided in code. The session type comes from the interface, not from the message, so "I am the operations manager" in a customer session changes nothing. If the call fails, the message goes to the session's own agent.
 - **Limits and logs:** at most 8 model calls per message, the same tool call at most twice, 60 seconds per call. Every turn is logged with tokens and timings; customer and order ids in the log are hashed or masked.
 
 ## Live demo
@@ -136,6 +138,18 @@ Read with care:
 | Median time | 15.6 s | 28.8 s |
 
 Contribution of the semantic layer: +75 points on 8 questions. The agent's only failed question is O6 (review scores of late and on-time orders); the reason is in the error analysis.
+
+**Router** (`eval/run_router.py`): the 37 golden set questions and 6 extra questions that either belong to the other session or ask for review analysis.
+
+| | Router |
+|---|---|
+| Golden set, right class | 37/37 |
+| Extra questions, right class | 6/6 |
+| Right access decision | 43/43 |
+| Mean input tokens | 280 |
+| Median time | 0.63 s |
+
+In the first run O6 (review score comparison) went to review analysis (36/37). The instruction got one clarification, "review scores are numbers, they are ops metrics", and the result became 37/37. The fix was made on the same question, so this result is a little optimistic.
 
 ## Security tests
 
@@ -235,7 +249,8 @@ src/tools/                   order tools, return requests with approval, handove
 src/knowledge/policies.py    policy RAG: splitting, embedding, search
 src/knowledge/metrics.yaml   semantic layer: the 8 metric definitions
 src/guardrails/              SQL validator
-src/agents/                  shared tool loop, Support Agent, Ops Data Agent, tool declarations, logging
+src/mcp_servers/             MCP server for the order tools (shopops-orders)
+src/agents/                  shared tool loop, router, Support Agent, Ops Data Agent, tool declarations, logging
 src/display.py               what the user sees: short ids, approval summary, result tables
 scripts/                     database build and checks, chat, demo customer, model info
 eval/                        golden set, B0 and agent runs, labels, comparison, security checks
@@ -254,10 +269,11 @@ logs/                        agent log and handover queue (not in the repository
 - The Ops Data Agent got 1 of 8 ops questions wrong (O6).
 - The demo runs on a sample and allows 15 questions per visitor.
 - In the demo, when two visitors are online at the same time, a new session removes the return request the other one approved. Giving every visitor their own database copy would be cleaner.
+- The demo has no login: the Customer and Operations buttons stand in for it, and anyone can open both sides. The operations side can also read order-level rows with SQL (it cannot write). In real use the role comes from the login system and this access is limited by permissions.
 
 ## Roadmap
 
-- **Next:** an MCP server for the order tools, a router between the agents, a larger injection test set (including reviews), per-step tracing, blog post draft.
+- **Next:** a larger injection test set (including reviews), per-step tracing, blog post draft.
 - **Last week:** one command for the whole evaluation, final README, answers to the brief's written questions, clean install test, v1.0.
 
 ## AI assistance
