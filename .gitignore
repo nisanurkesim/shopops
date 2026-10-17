@@ -222,7 +222,9 @@ __marimo__/
 # Olist data and derived database (CC BY-NC-SA, not committed)
 data/*.db
 
-data/chroma/
+# data/chroma (the policy index) IS committed: it is built from our own documents in
+# policies/, not from Olist data, and the demo server uses it as it is (Genel Rehber).
+# Rebuild it with python scripts/build_index.py after changing a policy document.
 logs/
 
 # PyCharm settings

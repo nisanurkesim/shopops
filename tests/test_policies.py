@@ -3,7 +3,9 @@
 #   python scripts/build_index.py
 import unittest
 
-from src.knowledge.policies import INDEX_DIR, load_chunks, search_policies
+import numpy as np
+
+from src.knowledge.policies import COLLECTION_NAME, INDEX_DIR, get_client, load_chunks, mean_pool, search_policies
 
 EXPECTED_DOCUMENTS = {
     "return_policy.md", "damaged_or_wrong_item.md", "shipping_and_delivery.md",
@@ -33,6 +35,17 @@ class TestSplitting(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
 
 
+class TestMeanPool(unittest.TestCase):
+
+    def test_padding_is_left_out_and_length_is_one(self):
+        # One text of two real tokens and one padding token
+        token_vectors = np.array([[[3.0, 0.0], [1.0, 0.0], [100.0, 100.0]]])
+        mask = np.array([[1, 1, 0]])
+        vector = mean_pool(token_vectors, mask)[0]
+        # mean of the real tokens is (2, 0); scaled to length 1 it is (1, 0)
+        np.testing.assert_allclose(vector, [1.0, 0.0])
+
+
 @unittest.skipUnless(INDEX_DIR.exists(), "index not built: run python scripts/build_index.py")
 class TestSearch(unittest.TestCase):
 
@@ -54,6 +67,13 @@ class TestSearch(unittest.TestCase):
     def test_someone_elses_order(self):
         self.assert_in_top_3("başkasının siparişini görebilir miyim", "account_and_privacy.md")
 
+    def test_index_matches_policy_files(self):
+        # The index is committed, so a policy edit without a rebuild must fail here
+        stored = get_client().get_collection(COLLECTION_NAME).get()
+        in_index = dict(zip(stored["ids"], stored["documents"]))
+        in_files = {c.chunk_id: c.body for c in load_chunks()}
+        self.assertEqual(in_index, in_files, "index is out of date: run python scripts/build_index.py")
+
     def test_results_have_source_fields(self):
         hit = search_policies("iade süresi", k=1)[0]
         for key in ["document", "title", "section", "text", "score"]:
@@ -61,4 +81,4 @@ class TestSearch(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main()
