@@ -7,6 +7,7 @@
 # On the demo server there is no database at the start: the app builds a sample of it
 # and loads the embedding model before the first question (Genel Rehber, deploy notes).
 # Run: streamlit run app.py
+import os
 import sqlite3
 import traceback
 from datetime import date
@@ -42,6 +43,12 @@ SAMPLE_QUESTIONS = {
         "En çok sipariş hangi eyaletten geliyor?",
     ],
 }
+
+# The demo runs on a free Gemini quota shared by every visitor: each browser session may ask
+# this many questions (a page reload starts a new session, so this is a brake, not a lock).
+# SHOPOPS_MAX_QUESTIONS can set a smaller number to try the limit without using the quota.
+MAX_QUESTIONS = int(os.environ.get("SHOPOPS_MAX_QUESTIONS", 15))
+REPO_URL = "https://github.com/nisanurkesim/shopops"
 
 # Not a customer question: shows that the agent does not give out other customers' data (R1).
 # Kept apart from the sample questions so it is clearly a test for the people trying the demo.
@@ -134,6 +141,7 @@ def get_agent(key: str, role: str, customer: str | None):
 
 def send(agent, chat: list, text: str, role: str):
     chat.append({"role": "user", "text": text})
+    show_message(chat[-1])   # the question stays on screen while the agent works
     with st.spinner("Asistan çalışıyor... Ücretsiz katmanda bu 10-60 saniye sürebilir."):
         reply = agent.ask(text)
     message = {
@@ -145,8 +153,8 @@ def send(agent, chat: list, text: str, role: str):
     }
     if role == "Operasyon":
         message["table"] = last_table(reply.steps)
-    if reply.stop_reason == "api_error" and agent.last_error:
-        message["meta"] += f" · hata: {agent.last_error[:80]}"
+    # On an API error the visitor sees the Turkish message from the agent; the technical
+    # error is in the log (logs/agent_log.jsonl), not on the screen.
     chat.append(message)
 
 
@@ -168,7 +176,7 @@ def show_message(message: dict):
             st.caption(message["meta"])
 
 
-def show_approval(agent: SupportAgent, chat: list):
+def show_approval(agent: SupportAgent, chat: list, disabled: bool = False):
     """Human approval (G1): the summary comes from the code, the answer from a button."""
     with st.container(border=True):
         st.markdown("**İade talebi özeti**")
@@ -177,10 +185,10 @@ def show_approval(agent: SupportAgent, chat: list):
         st.caption("Bu özeti agent değil uygulama gösteriyor. Talep yalnızca siz onaylarsanız oluşturulur; "
                    "sohbete \"onaylıyorum\" yazmak yetmez.")
         left, right = st.columns(2)
-        if left.button("Onaylıyorum", type="primary"):
+        if left.button("Onaylıyorum", type="primary", disabled=disabled):
             chat.append({"role": "assistant", "text": confirmation_text(agent.confirm_return(True))})
             st.rerun()
-        if right.button("Vazgeç"):
+        if right.button("Vazgeç", disabled=disabled):
             chat.append({"role": "assistant", "text": confirmation_text(agent.confirm_return(False))})
             st.rerun()
 
@@ -191,12 +199,20 @@ def main():
                f"demoda bugünün tarihi {turkish_date(SIMULATED_TODAY)} kabul edilir.")
     prepare_demo()
 
+    # A question is sent in two runs of the script. Run 1 only stores it in "pending" and
+    # starts run 2; run 2 shows every button switched off and then asks the agent.
+    # So nothing can be clicked or sent twice while an answer is on its way.
+    pending = st.session_state.get("pending")   # (chat key, question) or None
+    busy = pending is not None
+    asked = st.session_state.get("asked", 0)
+    limit_reached = asked >= MAX_QUESTIONS
+
     with st.sidebar:
-        role = st.radio("Kim olarak giriyorsunuz?", ["Müşteri", "Operasyon"])
+        role = st.radio("Kim olarak giriyorsunuz?", ["Müşteri", "Operasyon"], disabled=busy)
         customer = None
         if role == "Müşteri":
             customers = demo_customers()
-            label = st.selectbox("Demo müşteri", list(customers))
+            label = st.selectbox("Demo müşteri", list(customers), disabled=busy)
             customer = customers[label]
             st.caption("Gerçek bir uygulamada müşteri giriş yapar. Burada seçilen müşteri oturumun kimliği olur; "
                        "agent başka bir müşterinin siparişini göremez.")
@@ -210,17 +226,17 @@ def main():
         st.markdown("**Örnek sorular**")
         queued = None
         for i, question in enumerate(SAMPLE_QUESTIONS[role]):
-            if st.button(question, key=f"sample-{role}-{i}"):
+            if st.button(question, key=f"sample-{role}-{i}", disabled=busy or limit_reached):
                 queued = question
         if role in SECURITY_QUESTIONS:
             st.divider()
             st.markdown("**Güvenlik denemesi**")
             st.caption("Agent'ın başka müşterilerin bilgisini vermediğini görmek için.")
             for i, question in enumerate(SECURITY_QUESTIONS[role]):
-                if st.button(question, key=f"security-{role}-{i}"):
+                if st.button(question, key=f"security-{role}-{i}", disabled=busy or limit_reached):
                     queued = question
         st.divider()
-        reset = st.button("Sohbeti sıfırla")
+        reset = st.button("Sohbeti sıfırla", disabled=busy)
 
     key = f"support:{customer}" if role == "Müşteri" else "ops"
     chats = st.session_state.setdefault("chats", {})
@@ -238,12 +254,29 @@ def main():
     for message in chat:
         show_message(message)
     if role == "Müşteri" and agent.pending is not None:
-        show_approval(agent, chat)
+        show_approval(agent, chat, disabled=busy)
 
-    prompt = st.chat_input("Sorunuzu yazın")
+    if busy:
+        # Run 2: no chat box is drawn, so nothing can be typed while the agent works.
+        # "pending" is cleared before the agent is asked: if this run stops half way,
+        # the question is not sent a second time on the next run.
+        st.session_state["pending"] = None
+        if pending[0] == key:
+            send(agent, chat, pending[1], role)
+        st.rerun()
+
+    if limit_reached:
+        st.info(f"Bu oturumdaki {MAX_QUESTIONS} soru hakkınız doldu. Demo ücretsiz bir Gemini kotasıyla "
+                f"çalıştığı için soru sayısı sınırlı. Projenin ayrıntıları ve ölçüm sonuçları: {REPO_URL}")
+    # Inside a container the chat box sits at the end of the chat instead of being pinned
+    # to the bottom of the page, so the counter right above it is always next to it.
+    with st.container():
+        st.caption(f"Sorulan soru: {asked} / {MAX_QUESTIONS}")
+        prompt = st.chat_input("Sorunuzu yazın", disabled=limit_reached)
     text = prompt or queued
-    if text:
-        send(agent, chat, text, role)
+    if text and not limit_reached:
+        st.session_state["pending"] = (key, text)
+        st.session_state["asked"] = asked + 1
         st.rerun()
 
 
