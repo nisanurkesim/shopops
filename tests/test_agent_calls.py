@@ -76,6 +76,24 @@ class ModelCallTest(unittest.TestCase):
         self.assertEqual(reply.stop_reason, "api_error")
         self.assertEqual(len(reply.model_calls), 1)
 
+    def test_quota_error_shows_the_quota_message(self):
+        client = FakeClient([errors.ClientError(429, "Quota exceeded")])
+        agent = support_agent.SupportAgent(Session("alice"), client=client)
+        self.assertEqual(agent.ask("Selam").text, base.QUOTA_MESSAGE)
+
+    def test_other_errors_show_the_general_message(self):
+        client = FakeClient([TimeoutError("read timed out")] * (support_agent.MAX_API_RETRIES + 1))
+        agent = support_agent.SupportAgent(Session("alice"), client=client)
+        self.assertEqual(agent.ask("Selam").text, base.API_ERROR_MESSAGE)
+
+    def test_quota_message_is_not_kept_after_a_later_timeout(self):
+        # The second turn fails for another reason: it must not say the quota is used up
+        client = FakeClient([errors.ClientError(429, "Quota exceeded")]
+                            + [TimeoutError("read timed out")] * (support_agent.MAX_API_RETRIES + 1))
+        agent = support_agent.SupportAgent(Session("alice"), client=client)
+        agent.ask("Selam")
+        self.assertEqual(agent.ask("Selam").text, base.API_ERROR_MESSAGE)
+
 
 if __name__ == "__main__":
     unittest.main()

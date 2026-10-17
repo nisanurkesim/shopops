@@ -21,6 +21,11 @@ MAX_API_RETRIES = 2    # extra attempts when Gemini is busy (503) or a call time
 HTTP_TIMEOUT_S = 60    # one model call may take at most this long, then it counts as failed
 
 API_ERROR_MESSAGE = "Şu anda isteğinizi yanıtlayamıyorum. Lütfen birkaç dakika sonra tekrar deneyin."
+# 429: the free Gemini quota is used up. Daily quotas reset at midnight Pacific time,
+# which is 10:00 or 11:00 in Turkey depending on US daylight saving time.
+QUOTA_MESSAGE = ("Demonun ücretsiz kullanım hakkı şu an dolu. Birkaç dakika sonra tekrar deneyin; "
+                 "sorun sürerse günlük hak dolmuş olabilir. Günlük hak her gün Türkiye saatiyle "
+                 "sabah 10:00-11:00 civarında yenilenir.")
 MAX_STEPS_MESSAGE = "Bu soruyu şu an yanıtlayamadım. İsterseniz talebinizi bir müşteri temsilcisine iletebilirim."
 REPEATED_CALL_RESULT = {
     "error": "REPEATED_CALL",
@@ -69,6 +74,7 @@ class ToolAgent:
         self.client = client or make_client()
         self.history: list[types.Content] = []
         self.last_error: str | None = None
+        self.last_error_code: int | None = None   # HTTP code of the last failed call (429: quota)
         self.config = types.GenerateContentConfig(
             system_instruction=self.system_prompt,
             temperature=TEMPERATURE,
@@ -120,7 +126,8 @@ class ToolAgent:
             response = self._generate(reply)
             if response is None:
                 del self.history[start:]   # forget the failed turn
-                reply.text, reply.stop_reason = API_ERROR_MESSAGE, "api_error"
+                message = QUOTA_MESSAGE if self.last_error_code == 429 else API_ERROR_MESSAGE
+                reply.text, reply.stop_reason = message, "api_error"
                 return reply
 
             usage = response.usage_metadata
@@ -184,11 +191,13 @@ class ToolAgent:
                 return response
             except errors.APIError as e:
                 self.last_error = f"{e.code}: {e.message}"
+                self.last_error_code = e.code
                 # 5xx: Gemini is busy. 499: the call was cancelled on the server side (seen in
                 # the eval run, error analysis 8). 429 means the quota is used up: no retry.
                 retryable = isinstance(e, errors.ServerError) or e.code == 499
             except Exception as e:   # timeout or network error
                 self.last_error = f"{type(e).__name__}: {e}"
+                self.last_error_code = None
                 retryable = True
             call["latency_s"] = round(time.perf_counter() - start, 2)
             call["error"] = self.last_error[:120]
