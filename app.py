@@ -172,12 +172,14 @@ def show_message(message: dict):
                 st.code(table["sql"], language="sql")
                 if table["caveat"]:
                     st.caption(table["caveat"])
-        if message.get("steps"):
-            with st.expander("Demo için: agent'ın adımları"):
-                for line in message["steps"]:
+        # Steps, tokens and time are for the people testing the demo, not for the
+        # customer: kept in one closed box under the answer
+        if message.get("steps") or message.get("meta"):
+            with st.expander("Demo için: teknik ayrıntılar"):
+                for line in message.get("steps", []):
                     st.text(line)
-        if message.get("meta"):
-            st.caption(message["meta"])
+                if message.get("meta"):
+                    st.caption(message["meta"])
 
 
 def show_approval(agent: SupportAgent, chat: list, disabled: bool = False):
