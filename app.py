@@ -89,24 +89,29 @@ def load_embedding_model() -> bool:
 def prepare_demo():
     """Build the database and load the model before the first question, and tell the
     visitor what they are waiting for. Shows nothing once both are ready."""
+    # The box lives in a placeholder that is created in every run, at the same place.
+    # When the work is done the placeholder is emptied, so no old box stays on the page.
+    slot = st.empty()
     need_db = not DB_PATH.exists()
     need_model = not model_loaded()
     if not need_db and not need_model:
         return
-    with st.status("Demo hazırlanıyor. İlk açılışta 1-2 dakika sürebilir.", expanded=True) as status:
-        try:
-            if need_db:
-                st.write("Olist verisi indiriliyor ve demo veritabanı kuruluyor...")
-                build_demo_database()
-            if need_model:
-                st.write("Politika araması için dil modeli yükleniyor (ilk açılışta yaklaşık 470 MB iner)...")
-                load_embedding_model()
-        except Exception:
-            traceback.print_exc()   # the details go to the server log, not to the visitor
-            status.update(label="Demo şu an hazırlanamadı.", state="error")
-            st.error("Veri ya da model şu an indirilemedi. Birkaç dakika sonra sayfayı yenileyin.")
-            st.stop()
-        status.update(label="Demo hazır.", state="complete", expanded=False)
+    with slot.container():
+        with st.status("Demo hazırlanıyor. İlk açılışta 1-2 dakika sürebilir.", expanded=True) as status:
+            try:
+                if need_db:
+                    st.write("Olist verisi indiriliyor ve demo veritabanı kuruluyor...")
+                    build_demo_database()
+                if need_model:
+                    st.write("Politika araması için dil modeli yükleniyor (ilk açılışta yaklaşık 470 MB iner)...")
+                    load_embedding_model()
+            except Exception:
+                traceback.print_exc()   # the details go to the server log, not to the visitor
+                status.update(label="Demo şu an hazırlanamadı.", state="error")
+                st.error("Veri ya da model şu an indirilemedi. Birkaç dakika sonra sayfayı yenileyin.")
+                st.stop()
+    slot.empty()
+    st.toast("Demo hazır.")   # a short note in the corner that goes away by itself
 
 
 TR_MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
