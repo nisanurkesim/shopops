@@ -2,6 +2,9 @@
 # The loop, its limits, retries and the log are in src/agents/base.py. What is specific
 # here: the customer comes from the session, and a return request is only prepared by the
 # LLM; it is written after the customer confirms it in the interface (G1).
+# Order tools: in the app, the CLI and the eval they run in the shopops-orders MCP server
+# (orders=McpOrders(...)), which checks identity and approval itself. Without `orders`
+# they run in this process; the unit tests use that, so they need no server process.
 from pathlib import Path
 
 from google.genai import types
@@ -15,6 +18,9 @@ from src.agents.support_tools import TOOL_DECLARATIONS, execute_tool
 from src.agents.trace import hash_id, outcome
 from src.tools.orders import Session
 from src.tools.return_requests import PendingReturn, create_return_request, prepare_return_request
+
+# Read-only order tools that run in the shopops-orders MCP server when the agent has one
+MCP_ORDER_TOOLS = {"get_order_status", "list_customer_orders", "check_return_eligibility"}
 
 SYSTEM_PROMPT = f"""Sen Örnekpazar'ın müşteri destek asistanısın. Bugünün tarihi {SIMULATED_TODAY}.
 
@@ -40,8 +46,9 @@ class SupportAgent(ToolAgent):
     tool_declarations = TOOL_DECLARATIONS
 
     def __init__(self, session: Session, client=None, model: str = GEMINI_MODEL,
-                 log_path: Path | None = None):
+                 log_path: Path | None = None, orders=None):
         self.session = session
+        self.orders = orders   # McpOrders, or None to run the order tools in this process
         self.pending: PendingReturn | None = None   # waits for the customer's answer, never sent to the LLM
         self.interface_note: str | None = None      # outcome of the last confirmation, sent with the next message
         super().__init__(client=client, model=model, log_path=log_path)
@@ -59,10 +66,14 @@ class SupportAgent(ToolAgent):
     def _run_tool(self, name: str, args: dict) -> dict:
         if name == "create_return_request":
             return self._prepare_return(args)
+        if self.orders is not None and name in MCP_ORDER_TOOLS:
+            return self.orders.call(name, args)
         return execute_tool(self.session, name, args)
 
     def _prepare_return(self, args: dict) -> dict:
         """Prepare a return request. The token stays here; the LLM only gets the summary."""
+        if self.orders is not None:
+            return self._prepare_return_mcp(args)
         try:
             result, pending = prepare_return_request(self.session, args["order_id"], args["reason"])
         except KeyError as e:
@@ -71,6 +82,18 @@ class SupportAgent(ToolAgent):
             return {"error": "TOOL_FAILED", "message": str(e)}
         if pending is not None:
             self.pending = pending
+        return result
+
+    def _prepare_return_mcp(self, args: dict) -> dict:
+        """The server prepares the request and returns an approval token with it.
+        The token is taken out here, before the result goes to the LLM."""
+        result = self.orders.call("create_return_request", args)
+        token = result.pop("approval_token", None)
+        if token is not None:
+            self.pending = PendingReturn(
+                token=token, customer_unique_id=self.session.customer_unique_id,
+                order_id=result["order_id"], reason=result["reason"],
+                refund_amount=result["refund_amount"], status=result["approval_level"])
         return result
 
     def confirm_return(self, approved: bool) -> dict:
@@ -87,6 +110,9 @@ class SupportAgent(ToolAgent):
         pending, self.pending = self.pending, None
         if pending is None:
             return {"error": "NO_PENDING_REQUEST"}
+        if self.orders is not None:   # the server checks the token and writes the request
+            result = self.orders.call("confirm_return_request",
+                                      {"approval_token": pending.token, "approved": approved})
         if not approved:
             self.interface_note = (f"[Interface note] The customer did not confirm the return "
                                    f"request for order {pending.order_id}. Nothing was created and "
@@ -94,7 +120,8 @@ class SupportAgent(ToolAgent):
                                    f"the return, call create_return_request again so a new summary "
                                    f"is shown.")
             return {"status": "CANCELLED_BY_CUSTOMER", **pending.summary()}
-        result = create_return_request(self.session, pending, pending.token)
+        if self.orders is None:
+            result = create_return_request(self.session, pending, pending.token)
         if "return_request_id" in result:
             self.interface_note = (f"[Interface note] The customer confirmed. Return request "
                                    f"#{result['return_request_id']} was created for order "

@@ -14,6 +14,7 @@ from pathlib import Path
 # Let this script import config.py and src/ from the project root
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from config import DB_PATH, GEMINI_MODEL, TEMPERATURE
+from src.agents.mcp_orders import McpOrders
 from src.agents.support_agent import SupportAgent, make_client
 from src.agents.trace import LOG_PATH, outcome
 from src.knowledge.policies import POLICY_DIR
@@ -187,8 +188,11 @@ def main():
             continue
 
         before = count_requests()
-        agent = SupportAgent(Session(case["session_customer"]), client=client, log_path=LOG_PATH)
+        orders = McpOrders(case["session_customer"])   # order tools through the MCP server, as in the app
+        agent = SupportAgent(Session(case["session_customer"]), client=client, log_path=LOG_PATH,
+                             orders=orders)
         reply = agent.ask(case["question"])   # the approval is never given
+        orders.close()
         written = count_requests() - before
 
         row.update({"answer": reply.text, "tools": describe_steps(reply.steps),
@@ -219,4 +223,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()

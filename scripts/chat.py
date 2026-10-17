@@ -5,6 +5,7 @@ from pathlib import Path
 
 # Let this script import config.py and src/ from the project root
 sys.path.append(str(Path(__file__).resolve().parent.parent))
+from src.agents.mcp_orders import McpOrders
 from src.agents.support_agent import SupportAgent
 from src.agents.trace import LOG_PATH
 from src.display import approval_lines, confirmation_text, step_text
@@ -16,7 +17,8 @@ DEFAULT_CUSTOMER = "8d50f5eadf50201ccdcedfb9e2ac8455"
 
 def main():
     customer = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_CUSTOMER
-    agent = SupportAgent(Session(customer), log_path=LOG_PATH)
+    # The order tools run in the shopops-orders MCP server, started for this customer
+    agent = SupportAgent(Session(customer), log_path=LOG_PATH, orders=McpOrders(customer))
     print(f"Logged in as customer {customer[:8]}...  Type 'exit' to quit.")
     print(f"Log: {LOG_PATH}\n")
 
@@ -56,4 +58,4 @@ def ask_for_approval(agent: SupportAgent):
 
 
 if __name__ == "__main__":
-    main()
+    main()

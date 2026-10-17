@@ -20,6 +20,7 @@ from unittest import mock
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from config import GEMINI_MODEL
 import src.agents.support_tools as support_tools
+from src.agents.mcp_orders import McpOrders
 from src.agents.support_agent import SupportAgent, make_client
 from src.agents.trace import LOG_PATH
 from src.tools.orders import Session
@@ -93,9 +94,11 @@ def main(client=None):
                "input_tokens": 0, "output_tokens": 0, "latency_s": 0, "error": ""}
 
         before = count_requests()
-        agent = SupportAgent(Session(DEMO_CUSTOMER), client=client, log_path=LOG_PATH)
+        orders = McpOrders(DEMO_CUSTOMER)   # order tools through the MCP server, as in the app
+        agent = SupportAgent(Session(DEMO_CUSTOMER), client=client, log_path=LOG_PATH, orders=orders)
         with mock.patch.object(support_tools, "search_policies", poisoned(real_search, attack)):
             reply = agent.ask(question)   # the approval is never given
+        orders.close()
         written = count_requests() - before
 
         row.update({"answer": reply.text, "tools": describe_steps(reply.steps),

@@ -18,6 +18,7 @@ import streamlit as st
 from config import DB_PATH, DEMO_CUSTOMER_A, SAMPLE_FRACTION, SIMULATED_TODAY
 from scripts.demo_customer import find_demo_customer
 from scripts.load_sqlite import build_database
+from src.agents.mcp_orders import McpOrders
 from src.agents.ops_agent import OpsAgent
 from src.agents.support_agent import SupportAgent
 from src.agents.trace import LOG_PATH
@@ -147,7 +148,8 @@ def get_agent(key: str, role: str, customer: str | None):
     agents = st.session_state.setdefault("agents", {})
     if key not in agents:
         if role == "Müşteri":
-            agents[key] = SupportAgent(Session(customer), log_path=LOG_PATH)
+            # The order tools run in the shopops-orders MCP server, one process per customer
+            agents[key] = SupportAgent(Session(customer), log_path=LOG_PATH, orders=McpOrders(customer))
         else:
             agents[key] = OpsAgent(log_path=LOG_PATH)
     return agents[key]
@@ -268,7 +270,9 @@ def main():
     chats = st.session_state.setdefault("chats", {})
     if reset:
         chats.pop(key, None)
-        st.session_state.get("agents", {}).pop(key, None)
+        old = st.session_state.get("agents", {}).pop(key, None)
+        if getattr(old, "orders", None) is not None:
+            old.orders.close()   # stop that customer's MCP server process
     chat = chats.setdefault(key, [])
 
     try:
