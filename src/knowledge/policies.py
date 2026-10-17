@@ -1,5 +1,7 @@
 # Policy RAG: split the policy documents into sections, embed them and search them
+import atexit
 import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -130,8 +132,28 @@ def embed(texts: list[str]) -> list[list[float]]:
 
 
 def get_client():
+    """The committed index folder itself. Only build_index writes through this."""
     import chromadb
     return chromadb.PersistentClient(path=str(INDEX_DIR))
+
+
+_search_client = None
+
+
+def open_index():
+    """The index for searching: a copy of data/chroma in a temporary folder, made once
+    per process. Chroma writes to its files even when it only reads (after a test run,
+    git status showed the committed index files as changed), and the committed folder
+    must stay exactly as build_index made it."""
+    global _search_client
+    if _search_client is None:
+        import chromadb
+        temp_dir = tempfile.mkdtemp(prefix="shopops_chroma_")
+        atexit.register(shutil.rmtree, temp_dir, ignore_errors=True)
+        copy = Path(temp_dir) / "chroma"
+        shutil.copytree(INDEX_DIR, copy)
+        _search_client = chromadb.PersistentClient(path=str(copy))
+    return _search_client
 
 
 def build_index() -> int:
@@ -159,7 +181,7 @@ def build_index() -> int:
 
 def search_policies(query: str, k: int = 3) -> list[dict]:
     """Return the k policy sections closest to the query, best first."""
-    collection = get_client().get_collection(COLLECTION_NAME)
+    collection = open_index().get_collection(COLLECTION_NAME)
     result = collection.query(query_embeddings=embed([QUERY_PREFIX + query]), n_results=k)
     hits = []
     for chunk_id, body, meta, distance in zip(

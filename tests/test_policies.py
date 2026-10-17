@@ -5,7 +5,7 @@ import unittest
 
 import numpy as np
 
-from src.knowledge.policies import COLLECTION_NAME, INDEX_DIR, get_client, load_chunks, mean_pool, search_policies
+from src.knowledge.policies import COLLECTION_NAME, INDEX_DIR, load_chunks, mean_pool, open_index, search_policies
 
 EXPECTED_DOCUMENTS = {
     "return_policy.md", "damaged_or_wrong_item.md", "shipping_and_delivery.md",
@@ -69,7 +69,7 @@ class TestSearch(unittest.TestCase):
 
     def test_index_matches_policy_files(self):
         # The index is committed, so a policy edit without a rebuild must fail here
-        stored = get_client().get_collection(COLLECTION_NAME).get()
+        stored = open_index().get_collection(COLLECTION_NAME).get()
         in_index = dict(zip(stored["ids"], stored["documents"]))
         in_files = {c.chunk_id: c.body for c in load_chunks()}
         self.assertEqual(in_index, in_files, "index is out of date: run python scripts/build_index.py")
