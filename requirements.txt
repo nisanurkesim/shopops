@@ -2,7 +2,11 @@
 # (Python 3.14, Windows, October 2026). Their own dependencies are chosen by pip.
 kagglehub==1.0.2
 pandas==3.0.6
-sentence-transformers==6.1.0
+# Policy RAG: the embedding model runs from its ONNX file (no torch, see src/knowledge/policies.py)
+onnxruntime==1.31.0
+tokenizers==0.23.3
+huggingface_hub==1.33.0
+numpy==2.5.3
 chromadb==1.5.9
 google-genai==2.29.0
 python-dotenv==1.2.4

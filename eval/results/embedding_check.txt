@@ -1,0 +1,19 @@
+Model: intfloat/multilingual-e5-small
+Texts: 31 policy sections + 12 questions
+Cosine similarity old vs new: min 1.000000, mean 1.000000
+
+Top-3 search results (old | new):
+  SAME  Hasarlı ürün gelirse ne yapmam gerekiyor?
+  SAME  Henüz kargoya verilmemiş bir siparişi nasıl iptal edebilirim?
+  SAME  Siparişin bir kısmını hediye çekiyle ödedim. İade edersem param nasıl geri gelir?
+  SAME  İade süresi hangi günden itibaren sayılıyor?
+  SAME  Siparişim tahmini teslim tarihinden çok sonra geldi. Bu durumda kargo ücretini geri alabilir miyim?
+  SAME  Sipariş bilgilerimi benden başka kimler görebilir?
+  SAME  Siparişime hediye paketi ve not ekletebilir miyim?
+  SAME  hasarlı ürün
+  SAME  siparişimi iptal etmek istiyorum
+  SAME  ürün çok geç geldi, kargo ücretimi geri alabilir miyim
+  SAME  başkasının siparişini görebilir miyim
+  SAME  iade süresi
+
+Same top-3 for 12 of 12 questions; largest score difference among them: 0.000000
