@@ -113,6 +113,16 @@ def turkish_date(iso: str) -> str:
     return f"{d.day} {TR_MONTHS[d.month - 1]} {d.year}"
 
 
+def clear_return_requests():
+    """Remove every return request (only called on the demo sample, see main)."""
+    con = sqlite3.connect(DB_PATH)
+    try:
+        with con:
+            con.execute("DELETE FROM return_requests")
+    finally:
+        con.close()
+
+
 def is_sample_database() -> bool:
     """True when the database is a sample (load_sqlite.py marks it with user_version)."""
     con = sqlite3.connect(f"{DB_PATH.as_uri()}?mode=ro", uri=True)
@@ -204,6 +214,15 @@ def main():
     st.caption("Örnekpazar destek ve operasyon asistanı · Olist verisi · Veri 2018'de bittiği için "
                f"demoda bugünün tarihi {turkish_date(SIMULATED_TODAY)} kabul edilir.")
     prepare_demo()
+
+    # On the demo server all visitors share one database. A request approved by one visitor
+    # would block the approval step for everyone after them ("a request already exists"),
+    # so every new browser session starts without return requests. Only on the sample:
+    # the full database keeps its rows, the eval needs them (golden case S14).
+    if "started" not in st.session_state:
+        st.session_state["started"] = True
+        if is_sample_database():
+            clear_return_requests()
 
     # A question is sent in two runs of the script. Run 1 only stores it in "pending" and
     # starts run 2; run 2 shows every button switched off and then asks the agent.
