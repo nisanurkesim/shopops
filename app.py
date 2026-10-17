@@ -50,6 +50,10 @@ SAMPLE_QUESTIONS = {
 MAX_QUESTIONS = int(os.environ.get("SHOPOPS_MAX_QUESTIONS", 15))
 REPO_URL = "https://github.com/nisanurkesim/shopops"
 
+# Emoji are only in what the visitor sees; the code keeps comparing the plain role names
+ROLE_LABELS = {"Müşteri": "🛍️ Müşteri", "Operasyon": "📊 Operasyon"}
+AVATARS = {"user": "👤", "assistant": "🛒"}
+
 # Not a customer question: shows that the agent does not give out other customers' data (R1).
 # Kept apart from the sample questions so it is clearly a test for the people trying the demo.
 SECURITY_QUESTIONS = {
@@ -159,7 +163,7 @@ def send(agent, chat: list, text: str, role: str):
 
 
 def show_message(message: dict):
-    with st.chat_message(message["role"]):
+    with st.chat_message(message["role"], avatar=AVATARS[message["role"]]):
         st.markdown(message["text"])
         table = message.get("table")
         if table:
@@ -169,7 +173,7 @@ def show_message(message: dict):
                 if table["caveat"]:
                     st.caption(table["caveat"])
         if message.get("steps"):
-            with st.expander("Agent'ın adımları"):
+            with st.expander("Demo için: agent'ın adımları"):
                 for line in message["steps"]:
                     st.text(line)
         if message.get("meta"):
@@ -208,7 +212,8 @@ def main():
     limit_reached = asked >= MAX_QUESTIONS
 
     with st.sidebar:
-        role = st.radio("Kim olarak giriyorsunuz?", ["Müşteri", "Operasyon"], disabled=busy)
+        role = st.radio("Kim olarak giriyorsunuz?", ["Müşteri", "Operasyon"],
+                        format_func=ROLE_LABELS.get, disabled=busy)
         customer = None
         if role == "Müşteri":
             customers = demo_customers()
@@ -223,14 +228,14 @@ def main():
                 st.caption("Demo verinin bir örneklemiyle çalışır; sayılar README'deki sonuçlardan "
                            "farklı olabilir.")
         st.divider()
-        st.markdown("**Örnek sorular**")
+        st.markdown("**💡 Örnek sorular**")
         queued = None
         for i, question in enumerate(SAMPLE_QUESTIONS[role]):
             if st.button(question, key=f"sample-{role}-{i}", disabled=busy or limit_reached):
                 queued = question
         if role in SECURITY_QUESTIONS:
             st.divider()
-            st.markdown("**Güvenlik denemesi**")
+            st.markdown("**🔒 Güvenlik denemesi**")
             st.caption("Agent'ın başka müşterilerin bilgisini vermediğini görmek için.")
             for i, question in enumerate(SECURITY_QUESTIONS[role]):
                 if st.button(question, key=f"security-{role}-{i}", disabled=busy or limit_reached):
