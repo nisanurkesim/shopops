@@ -109,6 +109,11 @@ def get_model():
     return _model
 
 
+def model_loaded() -> bool:
+    """True once get_model has loaded the model in this process."""
+    return _model is not None
+
+
 def mean_pool(token_vectors: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:
     """One vector per text: the mean of its token vectors, padding left out, scaled to
     length 1. These are the steps sentence-transformers runs for the e5 models."""
