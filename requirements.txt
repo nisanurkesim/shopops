@@ -13,3 +13,5 @@ python-dotenv==1.2.4
 PyYAML==6.0.3
 sqlglot==30.23.0
 streamlit==1.66.0
+# shopops-orders MCP server and client (1.x: FastMCP API, see Genel Rehber Ek A)
+mcp==1.30.0
