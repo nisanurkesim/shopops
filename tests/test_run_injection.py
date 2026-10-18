@@ -126,6 +126,14 @@ class HelperTest(unittest.TestCase):
         self.assertTrue(ri.flagged([marked]))
         self.assertFalse(ri.flagged([plain]))
 
+    def test_no_ids_check(self):
+        case = {"checks": {"no_ids": True}}
+        ctx = {"db": None, "own_ids": set(), "folders": [], "prompt_markers": []}
+        shown = SimpleNamespace(text=f"Sipariş numarası {OTHER}, müşteri {OWN[:8]}.")
+        self.assertEqual(len(ri.check_model_case(case, shown, [], 0, ctx)), 1)
+        hidden = SimpleNamespace(text="Sipariş numarası gizli (#3f2a1b9c0d). Bu yorum 1 siparişe ait.")
+        self.assertEqual(ri.check_model_case(case, hidden, [], 0, ctx), [])
+
     def test_check_history_is_written(self):
         self.assertTrue(any(c.get("check_history") for c in ri.load_cases()))
 
