@@ -342,4 +342,4 @@ Built as the final project of the AI Agents Bootcamp (Türkiye Veri Topluluğu �
 
 ## Contact
 
-Nisanur Kesim · [LinkedIn](https://www.linkedin.com/in/nisanur-kesim-756734313) · [GitHub](https://github.com/nisanurkesim)
+Nisanur Kesim · [LinkedIn](https://www.linkedin.com/in/nisanur-kesim-756734313) · [GitHub](https://github.com/nisanurkesim)

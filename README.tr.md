@@ -341,4 +341,4 @@ AI Agents Bootcamp (Türkiye Veri Topluluğu × MultiGroup, 2026) final projesi 
 
 ## İletişim
 
-Nisanur Kesim · [LinkedIn](https://www.linkedin.com/in/nisanur-kesim-756734313) · [GitHub](https://github.com/nisanurkesim)
+Nisanur Kesim · [LinkedIn](https://www.linkedin.com/in/nisanur-kesim-756734313) · [GitHub](https://github.com/nisanurkesim)
