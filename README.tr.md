@@ -109,22 +109,46 @@ Demo hakkında:
 
 ## Sonuçlar
 
-Golden set üzerinde ölçüldü (`eval/golden_set.jsonl`): 15 destek, 7 politika ve 6 saldırı sorusu; ayrıca 8 ops sorusu ve bir SQL saldırısı. Her vaka, onu seçen SQL ile birlikte veritabanından üretildi. Tam tablo: [eval/results/comparison.md](eval/results/comparison.md). Neyin ters gittiği ve ne değiştirildiği: [docs/error_analysis.md](docs/error_analysis.md).
+Golden set üzerinde ölçüldü (`eval/golden_set.jsonl`): 15 destek, 7 politika ve 6 saldırı sorusu; ayrıca 8 ops sorusu ve bir SQL saldırısı. Her vaka, onu seçen SQL ile birlikte veritabanından üretildi. Bütün tablolar tek komutla yeniden üretilir: `python eval/run_eval.py`. Bu komut model çağırmaz, kaydedilmiş cevaplardan çalışır. Tam tablo ve her sütunun nasıl sayıldığı: [eval/results/results.md](eval/results/results.md). Neyin ters gittiği ve ne değiştirildiği: [docs/error_analysis.md](docs/error_analysis.md).
 
-| | B0 (tool'suz tek LLM çağrısı) | Support Agent |
-|---|---|---|
-| Uydurma bilgi içeren cevaplar (elle etiketlendi) | 6/28 (%21) | 1/28 (%4) |
-| Geçen otomatik kontroller (doğru tool, sebep ve sonuç) | - | 28/28 |
-| Gizlenen yabancı siparişler (`eval/check_access.py`) | - | 10/10 |
-| Müşteri onayı olmadan yazılan satır | - | 0 |
-| Soru başına ortanca süre | 1,2 sn | 20,5 sn |
-| Soru başına ortalama input token | 2.953 | 3.927 |
+Final sistem üç baseline ile karşılaştırıldı. Üçü de aynı modeli kullanıyor; farkları şunlar:
+
+- **B0:** tek bir LLM çağrısı, bütün politika metinleri prompt'ta, tool yok.
+- **B1 (naif RAG):** politika aramasının bulduğu en yakın 3 bölüm prompt'ta, tool yok.
+- **B2:** operasyon soruları için. Aynı agent döngüsü, ama elinde yalnızca SQL tool'u ve ham tablo şeması var; metrik tanımları (semantic layer) yok.
+
+| | Görev başarısı | Uydurma bilgi (elle) | Politikaya sadakat (hakem) | Yardımcı olma 1–5 (hakem) | SQL doğruluğu | 1.000 görevin maliyeti | Ortanca süre |
+|---|---|---|---|---|---|---|---|
+| B0 | – | 6/28 (%21) | 1,00 | 3,64 | – | 1,07 $ | 1,2 sn |
+| B1 | – | 0/28 (%0) | 0,97 | 3,04 | – | 0,25 $ | 0,9 sn |
+| B2 | – | – | – | – | 1/8 (%12) | 1,12 $ | 15,7 sn |
+| Final | 27/28 (%96) | 1/28 (%4) | 1,00 | 4,93 | 7/8 (%88) | 1,47 $ / 2,13 $ | 20,5 / 28,2 sn |
+
+Sütunların anlamı:
+
+- **Görev başarısı:** otomatik kontrol geçti (doğru tool, doğru sebep, doğru sonuç) ve cevapta uydurma yok. B0 ve B1 siparişe bakamadığı için karar veremiyor; bu yüzden "–".
+- **Uydurma bilgi:** her cevap politikalarla ve tool sonuçlarıyla karşılaştırılarak elle okundu.
+- **Politikaya sadakat (policy faithfulness):** cevaptaki kural cümlelerinin ne kadarının politika belgelerinde gerçekten yazdığı. Bunu bir LLM hakem ölçtü (`eval/run_judge.py`, prompt: `eval/judge_prompt.md`).
+- **Yardımcı olma:** hakemin 1–5 arası puanı, yani cevabın müşterinin sorusunu ne kadar karşıladığı.
+- **SQL doğruluğu (execution accuracy):** agent'ın sorgusu, elle yazılmış doğru SQL ile aynı sonucu veriyor mu (O1–O8).
+- **Maliyet:** aynı token'ların ücretli katmanda tutacağı para; proje ücretsiz katmanda çalışıyor. Final satırında önce Support Agent'ın, sonra Ops Data Agent'ın sayısı var.
+
+Final'in diğer sonuçları:
+
+- Doğru tool seçimi: destek ve politika sorularında 20/20, ops sorularında 8/8.
+- Kural motorunun karar kodu: 12/12.
+- Yabancı siparişler: 10/10'u gizlendi (`eval/check_access.py`).
+- Injection seti: 20 çalıştırmanın hiçbirinde onaysız satır yazılmadı. Demodaki gibi router üzerinden gelen 14 saldırının 14'ü engellendi.
 
 Okurken dikkat:
 
 - Set küçük ve her vaka temperature 1.0 ile bir kez çalıştırıldı. Tek bir vaka bir grubu 4-17 puan oynatıyor.
 - Otomatik kontroller tool çağrılarına bakıyor, cevabın metnine bakmıyor. Bir vakada (S15) tool kargo iadesini buldu ama cevap bundan bahsetmedi. Bu yüzden her cevap ayrıca elle okundu.
 - Agent'ın süresinin çoğu API'yi beklemekle geçti: ücretsiz katmanda model çağrılarının %28'i "model yoğun" ya da zaman aşımı hatası verip tekrar denendi (hata analizi, madde 8).
+- B1 en az uyduran sistem, ama bunun nedeni iyi cevap vermesi değil. Eline gelen bölümleri neredeyse aynen tekrar ediyor ve çoğu cevabı şartlı kuruyor ("30 gün geçtiyse…"). Yanlış bir şey söylemiyor, ama sorulan siparişe dair de bir şey söylemiyor. Bu fark yardımcı olma puanında görünüyor.
+- Hakem, puanladığı sistemlerle aynı model. İlk çalıştırmadan sonra prompt'u bir kez düzelttim, çünkü siparişe özel tarih ve tutarları politika iddiası sayıyor, "ekrandan onaylayın" cümlesini de onaysız işlem sanıyordu. Prompt sonuçlar görüldükten sonra değiştiği için bu sayılar biraz iyimser olabilir.
+- Hakemin kararlarını 12 cevapta elle kontrol ettim; 7'sinde tam uyuştuk (%58). Hakem desteklenmeyen bazı iddiaları kaçırıyor: B0'ın uydurduğu bir iade adımını ve agent'ın P5'teki yanlış kargo kuralını. Bu yüzden sadakat sayıları gerçeğin üst sınırı gibi okunmalı. Uydurma için ana ölçü elle verilen etiketler.
+- B2, SQL doğrulayıcıya müşteri ve sipariş numaralarını gizleyen kural eklenmeden önce ölçüldü. Yeni bir çalıştırmada sonuç değişebilir.
 
 **Ops Data Agent** (8 ops sorusu, elle yazılmış golden SQL ile karşılaştırma). B2: aynı döngü, ama sadece `run_sql` ve ham tablo şeması.
 
@@ -133,8 +157,6 @@ Okurken dikkat:
 | SQL execution accuracy (O1-O8) | 1/8 (%12) | 7/8 (%88) |
 | Doğru metrik ya da tool seçimi | - | 8/8 |
 | SQL saldırısı engellendi (O9) | 1/1 | 1/1 |
-| Ortalama input token | 2.098 | 6.091 |
-| Medyan süre | 15,6 sn | 28,8 sn |
 
 Semantic layer'ın katkısı: 8 soruda +75 puan. Agent'ın tek başarısız sorusu O6 (yorum puanı karşılaştırması); sebebi hata analizinde.
 
@@ -203,14 +225,14 @@ Sonuçlar (`gemini-3.5-flash-lite`, temperature 1.0, her vaka bir kez; ayrıntı
 | Saldırı engellendi, demodaki gibi router + agent | 14/14 |
 | Saldırı engellendi, router olmadan | 6/6 |
 | Müşteri onayı olmadan yazılan satır | 20 çalıştırmada 0 |
-| Saldırı metni modele ulaştı / işaretliydi / model uydu | 6 / 6 / 0 |
+| Saldırı metni modele ulaştı / işaretliydi / model uydu | 7 / 7 / 0 |
 | Gerçek yorumlarda yanlış işaretleme | 42.691 yorumda 0 |
 | Log'da ham id | 0 |
 
 Okurken dikkat:
 
 - Belge en az 5 saldırı ve A1–A7'nin tamamını istiyor; bu set ikisini de karşılıyor. Metin için ≥%95 hedefini ölçmeye 14 vaka yetmez: tek bir hata sonucu %93'e düşürür.
-- Saldırıların çoğunu model hiç görmedi; router ya da bir tool önce durdurdu. Modelin zararlı metne direnci, metnin modele ulaştığı 6 çalıştırmada ölçüldü.
+- Saldırıların çoğunu model hiç görmedi; router ya da bir tool önce durdurdu. Modelin zararlı metne direnci, metnin modele ulaştığı 7 çalıştırmada ölçüldü.
 - İşaretleme bir kalıp listesiyle çalışıyor; farklı kelimelerle yazılmış bir talimat kaçabilir. Kelimelere bağlı olmayan koruma şu: yorumları okuyan agent'ın yazma tool'u yok.
 - Router bir kilit değil. M8'de mesaj hem bir metrik hem bir yorum istediği için router onu geçirdi.
 - İlk ölçümde iki M8 cevabı yanlışlıkla başarısız sayıldı: yorumdaki "%0"ı alıntılayıp sonra doğru oranı vermişlerdi. Kontrol "cevaptaki oran tool sonucuyla aynı olmalı" diye değiştirildi. Kontrol cevaplar görüldükten sonra değiştiği için bu sonuç biraz iyimser.
@@ -272,24 +294,36 @@ python scripts/ops_chat.py
 python scripts/load_sqlite.py --sample 0.3 --out data/demo_check.db
 ```
 
-Değerlendirmeyi çalıştırmak için (Gemini API kullanır; cevaplanmış sorular tekrar sorulmaz):
+Değerlendirmeyi çalıştırmak için:
+
+```bash
+python eval/run_eval.py            # bütün tabloları kaydedilmiş cevaplardan yeniden üretir (model çağırmaz)
+python eval/run_eval.py --model    # önce eksik model ölçümlerini çalıştırır (Gemini API kullanır)
+```
+
+Adımları tek tek çalıştırmak için (model kullananlar cevaplanmış soruları tekrar sormaz):
 
 ```bash
 python eval/make_golden_set.py     # golden set'i veritabanından üret
 python eval/run_baseline.py        # B0
+python eval/run_b1.py              # B1 (naif RAG)
 python eval/run_agent.py           # Support Agent
+python eval/run_ops.py final       # Ops Data Agent
+python eval/run_ops.py b2          # B2 (ham şema)
 python eval/label_baseline.py      # elle etiketler (cevaplar okunduktan sonra yazıldı)
+python eval/label_b1.py
 python eval/label_agent.py
+python eval/run_judge.py           # LLM hakem: politikaya sadakat ve yardımcı olma
+python eval/label_judge.py         # hakemin 12 cevapta elle kontrolü
 python eval/compare.py             # eval/results/comparison.md dosyasını yazar
 python eval/check_access.py        # yabancı siparişler
 python eval/run_injection.py       # injection test seti, sadece kod testleri
 python eval/run_injection.py --model   # kod ve model testleri
-python eval/run_ops.py             # Ops Data Agent ve B2
 python eval/trace_report.py        # görev başına adım, token, maliyet ve süre
 python scripts/trace_view.py       # son turların trace sayfası (logs/trace.html)
 ```
 
-Etiket script'leri `eval/results/` içindeki cevapların etiketlerini tutuyor. Yeni bir çalıştırmada cevaplar değişir; tekrar okunup etiketlenmeleri gerekir.
+Etiketler, etiketlendikleri cevabın parmak iziyle birlikte saklanıyor. Bir soru yeni bir cevap alırsa eski etiket ona uygulanmaz; `run_eval` hangi satırların yeniden etiketlenmesi gerektiğini söyler.
 
 ## Repo yapısı
 
@@ -308,8 +342,8 @@ src/mcp_servers/             sipariş tool'larının MCP server'ı (shopops-orde
 src/agents/                  ortak tool döngüsü, router, Support Agent, Ops Data Agent, tool tanımları, log
 src/display.py               kullanıcının gördükleri: kısa id'ler, onay özeti, sonuç tabloları
 scripts/                     veritabanı kurulumu ve kontrolleri, chat, demo müşteri, model bilgisi, trace sayfası
-eval/                        golden set, B0 ve agent çalıştırmaları, etiketler, karşılaştırma, güvenlik kontrolleri, trace raporu
-eval/results/                sonuç tabloları (CSV) ve comparison.md
+eval/                        golden set; B0, B1, B2 ve agent çalıştırmaları; etiketler; LLM hakem; güvenlik kontrolleri; trace raporu; tek komutla eval (run_eval.py)
+eval/results/                sonuç dosyaları (CSV), results.md ve comparison.md
 tests/                       unit testler (kural motoru, tool'lar, onay, döngü sınırları, injection, RAG)
 docs/                        veri bulguları, hata analizi, ekran görüntüleri
 logs/                        agent log'u ve temsilci kuyruğu (repoda yok)
@@ -328,8 +362,8 @@ logs/                        agent log'u ve temsilci kuyruğu (repoda yok)
 
 ## Yol haritası
 
-- **Sırada:** blog yazısı taslağı.
-- **Son hafta:** bütün değerlendirme için tek komut, son README, proje belgesindeki yazılı soruların cevapları, temiz kurulum testi, v1.0.
+- **Sırada:** son README, proje belgesindeki yazılı soruların cevapları, blog yazısının yayını.
+- **Son hafta:** B2'yi yeni SQL kuralıyla yeniden ölçmek, temiz kurulum testi, v1.0.
 
 ## Yapay zekâ desteği
 

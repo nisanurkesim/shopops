@@ -110,22 +110,46 @@ About the demo:
 
 ## Results
 
-Measured on the golden set (`eval/golden_set.jsonl`): 15 support, 7 policy and 6 attack questions, plus 8 ops questions and one SQL attack, built from the database with the SQL that picks each case. Full table: [eval/results/comparison.md](eval/results/comparison.md). What went wrong and what was changed: [docs/error_analysis.md](docs/error_analysis.md).
+Measured on the golden set (`eval/golden_set.jsonl`): 15 support, 7 policy and 6 attack questions, plus 8 ops questions and one SQL attack, built from the database with the SQL that picks each case. Every table is rebuilt with one command: `python eval/run_eval.py`. It calls no model and works from the saved answers. Full table and how each column is counted: [eval/results/results.md](eval/results/results.md). What went wrong and what was changed: [docs/error_analysis.md](docs/error_analysis.md).
 
-| | B0 (one LLM call, no tools) | Support Agent |
-|---|---|---|
-| Answers with made-up facts (manual labels) | 6/28 (21%) | 1/28 (4%) |
-| Automatic checks passed (right tool, reason and result) | - | 28/28 |
-| Foreign orders hidden (`eval/check_access.py`) | - | 10/10 |
-| Rows written without customer approval | - | 0 |
-| Median time per question | 1.2 s | 20.5 s |
-| Mean input tokens per question | 2,953 | 3,927 |
+The final system was compared with three baselines. All of them use the same model; they differ like this:
+
+- **B0:** one LLM call with all policy texts in the prompt, no tools.
+- **B1 (naive RAG):** the 3 closest sections from the policy search in the prompt, no tools.
+- **B2:** for the ops questions. The same agent loop, but with only an SQL tool and the raw table schema; no metric definitions (semantic layer).
+
+| | Task success | Made-up facts (manual) | Policy faithfulness (judge) | Helpfulness 1-5 (judge) | SQL execution accuracy | Cost per 1,000 tasks | Median time |
+|---|---|---|---|---|---|---|---|
+| B0 | - | 6/28 (21%) | 1.00 | 3.64 | - | $1.07 | 1.2 s |
+| B1 | - | 0/28 (0%) | 0.97 | 3.04 | - | $0.25 | 0.9 s |
+| B2 | - | - | - | - | 1/8 (12%) | $1.12 | 15.7 s |
+| Final | 27/28 (96%) | 1/28 (4%) | 1.00 | 4.93 | 7/8 (88%) | $1.47 / $2.13 | 20.5 / 28.2 s |
+
+What the columns mean:
+
+- **Task success:** the automatic check passed (right tool, right reason, right result) and the answer has no made-up fact. B0 and B1 cannot look at an order, so they cannot make a decision; hence "-".
+- **Made-up facts:** every answer was read by hand against the policies and the tool results.
+- **Policy faithfulness:** how many of the rule statements in an answer are really written in the policy documents. Measured by an LLM judge (`eval/run_judge.py`, prompt: `eval/judge_prompt.md`).
+- **Helpfulness:** the judge's 1-5 score, how well the answer meets the customer's question.
+- **SQL execution accuracy:** does the agent's query give the same result as a hand-written correct SQL (O1-O8).
+- **Cost:** what the same tokens would cost on the paid tier; the project runs on the free tier. In the Final row the first number is the Support Agent's, the second the Ops Data Agent's.
+
+Other results of the final system:
+
+- Right tool chosen: 20/20 in support and policy questions, 8/8 in ops questions.
+- Decision code of the rule engine: 12/12.
+- Foreign orders: 10/10 hidden (`eval/check_access.py`).
+- Injection set: no row written without approval in 20 runs. 14 of 14 attacks blocked when they came through the router, as in the demo.
 
 Read with care:
 
 - The set is small and each case was run once at temperature 1.0. One case moves a group by 4-17 points.
 - The automatic checks look at the tool calls, not at the wording. In one case (S15) the tool found a freight refund but the answer did not mention it, so every answer was also read by hand.
 - Most of the agent's time was spent waiting for the API: 28% of the model calls failed with "model is busy" or a timeout on the free tier and were retried (error analysis, item 8).
+- B1 makes the fewest false claims, but not because it answers well. It repeats the sections it gets almost word for word and puts most answers as conditions ("if 30 days have passed..."). It says nothing wrong, but it also says nothing about the order that was asked about. The helpfulness score shows this.
+- The judge is the same model as the systems it scores. After the first run I corrected its prompt once: it counted order dates and amounts as policy claims and read "approve it on the screen" as an action without approval. The prompt was changed after seeing the results, so these numbers may be a little optimistic.
+- I checked the judge's decisions by hand on 12 answers; we fully agreed on 7 (58%). The judge misses some unsupported claims: a return step B0 made up, and the agent's wrong freight rule in P5. So the faithfulness numbers should be read as an upper bound. The manual labels are the main measure of made-up facts.
+- B2 was measured before the SQL validator got the rule that hides customer and order ids. A new run could give a different result.
 
 **Ops Data Agent** (8 ops questions, compared with a hand-written golden SQL). B2 is the same loop with only `run_sql` and the raw table schema.
 
@@ -134,8 +158,6 @@ Read with care:
 | SQL execution accuracy (O1-O8) | 1/8 (12%) | 7/8 (88%) |
 | Right metric or tool chosen | - | 8/8 |
 | SQL attack blocked (O9) | 1/1 | 1/1 |
-| Mean input tokens | 2,098 | 6,091 |
-| Median time | 15.6 s | 28.8 s |
 
 Contribution of the semantic layer: +75 points on 8 questions. The agent's only failed question is O6 (review scores of late and on-time orders); the reason is in the error analysis.
 
@@ -204,14 +226,14 @@ Results (`gemini-3.5-flash-lite`, temperature 1.0, each case run once; details: 
 | Attack blocked, router + agent as in the demo | 14/14 |
 | Attack blocked, without the router | 6/6 |
 | Rows written without customer approval | 0 in 20 runs |
-| Attack text reached the model / was flagged / the model followed it | 6 / 6 / 0 |
+| Attack text reached the model / was flagged / the model followed it | 7 / 7 / 0 |
 | Real reviews flagged by mistake | 0 of 42,691 |
 | Raw ids in the log | 0 |
 
 Read with care:
 
 - The brief asks for at least 5 attacks and for all of A1-A7; this set covers both. 14 cases are not enough to measure the target of 95% or more for text: one failure brings the result down to 93%.
-- The model never saw most of the attacks: the router or a tool stopped them first. The model's resistance to harmful text was measured in the 6 runs where the text reached it.
+- The model never saw most of the attacks: the router or a tool stopped them first. The model's resistance to harmful text was measured in the 7 runs where the text reached it.
 - The flag works with a list of patterns; an instruction written in other words can get through. The protection that does not depend on wording: the agent that reads reviews has no write tool.
 - The router is not a lock. In M8 the message asked for a metric and a review at the same time, so the router let it through.
 - In the first run two M8 answers were counted as failed by mistake: they quoted the "0%" in the review and then gave the right rate. The check was changed to "the rate in the answer must be the same as in the tool result". The check was changed after seeing the answers, so this result is a little optimistic.
@@ -273,24 +295,36 @@ python scripts/ops_chat.py
 python scripts/load_sqlite.py --sample 0.3 --out data/demo_check.db
 ```
 
-Run the evaluation (uses the Gemini API; answered questions are not asked again):
+Run the evaluation:
+
+```bash
+python eval/run_eval.py            # rebuilds every table from the saved answers (no model call)
+python eval/run_eval.py --model    # first runs the missing model measurements (uses the Gemini API)
+```
+
+Run the steps one by one (the ones that use the model do not ask answered questions again):
 
 ```bash
 python eval/make_golden_set.py     # build the golden set from the database
 python eval/run_baseline.py        # B0
+python eval/run_b1.py              # B1 (naive RAG)
 python eval/run_agent.py           # Support Agent
+python eval/run_ops.py final       # Ops Data Agent
+python eval/run_ops.py b2          # B2 (raw schema)
 python eval/label_baseline.py      # manual labels (written after reading the answers)
+python eval/label_b1.py
 python eval/label_agent.py
+python eval/run_judge.py           # LLM judge: policy faithfulness and helpfulness
+python eval/label_judge.py         # manual check of the judge on 12 answers
 python eval/compare.py             # writes eval/results/comparison.md
 python eval/check_access.py        # foreign orders
 python eval/run_injection.py       # injection test set, code checks only
 python eval/run_injection.py --model   # code and model checks
-python eval/run_ops.py             # Ops Data Agent and B2
 python eval/trace_report.py        # steps, tokens, cost and time per task
 python scripts/trace_view.py       # trace page of the last turns (logs/trace.html)
 ```
 
-The label scripts hold the labels for the answers in `eval/results/`. After a new run the answers change, so they have to be read and labelled again.
+The labels are kept with a fingerprint of the answer they were made for. If a question gets a new answer, the old label is not applied to it; `run_eval` says which rows need a new label.
 
 ## Repository structure
 
@@ -309,8 +343,8 @@ src/mcp_servers/             MCP server for the order tools (shopops-orders)
 src/agents/                  shared tool loop, router, Support Agent, Ops Data Agent, tool declarations, logging
 src/display.py               what the user sees: short ids, approval summary, result tables
 scripts/                     database build and checks, chat, demo customer, model info, trace page
-eval/                        golden set, B0 and agent runs, labels, comparison, security checks, trace report
-eval/results/                result tables (CSV) and comparison.md
+eval/                        golden set; B0, B1, B2 and agent runs; labels; LLM judge; security checks; trace report; one-command eval (run_eval.py)
+eval/results/                result files (CSV), results.md and comparison.md
 tests/                       unit tests (rule engine, tools, approval, loop limits, injection, RAG)
 docs/                        data findings, error analysis, screenshots
 logs/                        agent log and handover queue (not in the repository)
@@ -329,8 +363,8 @@ logs/                        agent log and handover queue (not in the repository
 
 ## Roadmap
 
-- **Next:** blog post draft.
-- **Last week:** one command for the whole evaluation, final README, answers to the brief's written questions, clean install test, v1.0.
+- **Next:** final README, answers to the brief's written questions, publishing the blog post.
+- **Last week:** measuring B2 again with the new SQL rule, clean install test, v1.0.
 
 ## AI assistance
 
