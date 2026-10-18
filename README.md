@@ -151,6 +151,36 @@ Contribution of the semantic layer: +75 points on 8 questions. The agent's only 
 
 In the first run O6 (review score comparison) went to review analysis (36/37). The instruction got one clarification, "review scores are numbers, they are ops metrics", and the result became 37/37. The fix was made on the same question, so this result is a little optimistic.
 
+## Trace and cost
+
+To see which steps the agent takes to answer a question, how long each step takes and how many tokens it uses, every turn is written to `logs/agent_log.jsonl`: the time and tokens of every model call (thinking included: tokens the model writes for itself before the answer; they are billed like output tokens), the time, input and short output of every tool step, and the cost of the turn. Ids are masked. The rows of SQL results are not logged, only the column names and the row count, because rows can hold a city or a zip code. The log is not in the repository.
+
+- `python eval/trace_report.py`: steps, tokens, cost and time per task (`eval/results/trace_report.md`).
+- `python scripts/trace_view.py`: a page that shows the last turns step by step (`logs/trace.html`).
+
+The picture below is the trace of one operations question: "2018 Temmuz'da SP eyaletinde geç teslim oranı neydi?" (What was the late delivery rate in the state of SP in July 2018?). The agent first looks at the list of defined metrics (`list_metrics`), then runs the right metric (`run_metric`) and writes the answer. Purple bars are model calls, green bars are tool steps; the length of a bar is the time of the step. The turn took 3 seconds; 1,000 questions like this one would cost about 2.1 USD on the paid tier.
+
+![Trace page: 3 model calls and 2 tool steps for the late delivery question, with the time and tokens of each](docs/images/trace_ops.png)
+
+Per task, on the golden set questions. Cost is computed with the paid-tier prices (0.30 USD per 1M input tokens, 2.50 USD per 1M output tokens); the project runs on the free tier, so nothing is actually paid.
+
+| System | Tasks | Tool calls (mean) | Cost per 1,000 tasks (USD) | Median time (s) | p95 time (s) |
+|---|---|---|---|---|---|
+| B0 | 28 | 0.0 | 1.07 | 1.2 | 8.1 |
+| Support Agent | 28 | 1.3 | 1.47 | 20.5 | 91.9 |
+| B2 | 9 | 1.0 | 1.12 | 15.7 | 28.9 |
+| Ops Data Agent | 9 | 1.8 | 2.13 | 28.2 | 45.3 |
+| Router | 43 | 0.0 | 0.09 | 0.6 | 1.6 |
+
+Median time: half of the questions took less than this. p95 time: 95% of the questions took less than this, so it shows the slowest few.
+
+Read with care:
+
+- The times were measured during the eval. The free tier was often busy that day; most of the time is waiting and retries (error analysis, item 8). In the turns traced on 18 October, one model call took less than a second and a whole turn 2-5 seconds.
+- In all 7 traced model calls the thinking tokens were 0, so the token counts in the eval files are enough to compute the cost.
+- The slowest tool step was the first policy search (3.1 s), because the embedding model is loaded from disk at that moment. The live demo loads the model when it starts.
+- The agents cost 1.4 and 1.9 times as much as B0 and B2, because they also read the tool results. In return they make up less and write more correct SQL (Results section).
+
 ## Security tests
 
 `eval/run_injection.py` tests all the attacks A1-A7 of the project brief (section 9.4) in one set; the cases are in `eval/injection_tests.jsonl`. The code checks (K1-K7) run without a model. The model checks (M1-M13) send every message through the router and the agent, as in the live demo. M4-M8 also run once without the router, to see what the agent would do if the router let a message through. The tests run on a temporary copy of the database; for A5 and A6, three made-up reviews with hidden instructions are added to this copy only.
@@ -254,6 +284,8 @@ python eval/check_access.py        # foreign orders
 python eval/run_injection.py       # injection test set, code checks only
 python eval/run_injection.py --model   # code and model checks
 python eval/run_ops.py             # Ops Data Agent and B2
+python eval/trace_report.py        # steps, tokens, cost and time per task
+python scripts/trace_view.py       # trace page of the last turns (logs/trace.html)
 ```
 
 The label scripts hold the labels for the answers in `eval/results/`. After a new run the answers change, so they have to be read and labelled again.
@@ -274,8 +306,8 @@ src/guardrails/              SQL validator, suspicious content flag
 src/mcp_servers/             MCP server for the order tools (shopops-orders)
 src/agents/                  shared tool loop, router, Support Agent, Ops Data Agent, tool declarations, logging
 src/display.py               what the user sees: short ids, approval summary, result tables
-scripts/                     database build and checks, chat, demo customer, model info
-eval/                        golden set, B0 and agent runs, labels, comparison, security checks
+scripts/                     database build and checks, chat, demo customer, model info, trace page
+eval/                        golden set, B0 and agent runs, labels, comparison, security checks, trace report
 eval/results/                result tables (CSV) and comparison.md
 tests/                       unit tests (rule engine, tools, approval, loop limits, injection, RAG)
 docs/                        data findings, error analysis, screenshots
@@ -295,7 +327,7 @@ logs/                        agent log and handover queue (not in the repository
 
 ## Roadmap
 
-- **Next:** per-step tracing, blog post draft.
+- **Next:** blog post draft.
 - **Last week:** one command for the whole evaluation, final README, answers to the brief's written questions, clean install test, v1.0.
 
 ## AI assistance

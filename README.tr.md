@@ -150,6 +150,36 @@ Semantic layer'ın katkısı: 8 soruda +75 puan. Agent'ın tek başarısız soru
 
 İlk ölçümde O6 (yorum puanı karşılaştırması) yorum analizine gitti (36/37). Talimata "yorum puanları sayıdır, ops metriğidir" açıklaması eklendi ve sonuç 37/37 oldu. Düzeltme aynı soru üzerinde yapıldığı için bu sonuç biraz iyimser.
 
+## Trace ve maliyet
+
+Agent bir soruyu cevaplarken hangi adımları attığını, her adımın ne kadar sürdüğünü ve kaç token harcadığını görmek için her tur `logs/agent_log.jsonl` dosyasına yazılıyor. Her model çağrısının süresi ve token'ları (thinking dahil: modelin cevabı yazmadan önce kendi içinde ürettiği token'lar; ücretleri output token gibi hesaplanıyor), her tool adımının süresi, girdisi ve kısa çıktısı ile turun maliyeti burada. Id'ler maskeleniyor. SQL sonuçlarının satırları log'a girmiyor, sadece kolon adları ve satır sayısı giriyor; çünkü satırlarda şehir ya da posta kodu olabilir. Log repoya girmiyor.
+
+- `python eval/trace_report.py`: görev başına adım, token, maliyet ve süre (`eval/results/trace_report.md`).
+- `python scripts/trace_view.py`: son turları adım adım gösteren bir sayfa (`logs/trace.html`).
+
+Aşağıdaki görüntü bir operasyon sorusunun trace'i: "2018 Temmuz'da SP eyaletinde geç teslim oranı neydi?" Agent önce tanımlı metriklerin listesine bakıyor (`list_metrics`), sonra doğru metriği çalıştırıyor (`run_metric`) ve cevabı yazıyor. Mor çubuklar model çağrıları, yeşil çubuklar tool adımları; çubuğun uzunluğu adımın süresini gösteriyor. Tur 3 saniye sürdü; bunun gibi 1.000 soru ücretli katmanda yaklaşık 2,1 USD tutardı.
+
+![Trace sayfası: geç teslim sorusu için 3 model çağrısı ve 2 tool adımı, her birinin süresi ve token sayısı](docs/images/trace_ops.png)
+
+Golden set'teki sorular üzerinden, görev başına. Maliyet ücretli katmanın fiyatıyla hesaplandı (1M input token 0,30 USD, 1M output token 2,50 USD); proje ücretsiz katmanda çalıştığı için gerçekte bir şey ödenmiyor.
+
+| Sistem | Görev | Tool çağrısı (ort.) | 1.000 görevin maliyeti (USD) | Ortanca süre (sn) | p95 süre (sn) |
+|---|---|---|---|---|---|
+| B0 | 28 | 0,0 | 1,07 | 1,2 | 8,1 |
+| Support Agent | 28 | 1,3 | 1,47 | 20,5 | 91,9 |
+| B2 | 9 | 1,0 | 1,12 | 15,7 | 28,9 |
+| Ops Data Agent | 9 | 1,8 | 2,13 | 28,2 | 45,3 |
+| Router | 43 | 0,0 | 0,09 | 0,6 | 1,6 |
+
+Ortanca süre: soruların yarısı bundan kısa sürdü. p95 süre: soruların %95'i bundan kısa sürdü; yani en yavaş birkaç soruyu gösteriyor.
+
+Okurken dikkat:
+
+- Süreler eval sırasında ölçüldü. Ücretsiz katman o gün sık sık yoğundu; sürenin çoğu bekleme ve tekrar denemelerden geliyor (hata analizi, madde 8). 18 Ekim'de trace ile ölçülen turlarda tek bir model çağrısı 1 saniyenin altında sürdü, bir tur 2–5 saniye.
+- Ölçülen 7 model çağrısının hepsinde thinking token'ı 0'dı; bu yüzden eval dosyalarındaki token sayıları maliyeti hesaplamaya yetiyor.
+- En yavaş tool adımı ilk politika araması oldu (3,1 sn), çünkü embedding modeli o sırada diskten yükleniyor. Canlı demo modeli açılışta yüklüyor.
+- Agent'lar B0 ve B2'den 1,4 ve 1,9 kat daha pahalı, çünkü tool sonuçlarını da okuyorlar. Karşılığında daha az uydurma ve daha doğru SQL (Sonuçlar bölümü).
+
 ## Güvenlik testleri
 
 `eval/run_injection.py`, proje belgesindeki (bölüm 9.4) A1–A7 saldırılarının hepsini tek bir sette deniyor; vakalar `eval/injection_tests.jsonl` dosyasında. Kod testleri (K1–K7) modelsiz çalışıyor. Model testleri (M1–M13) her mesajı canlı demodaki gibi router ve agent'tan geçiriyor. M4–M8 bir kez de router olmadan çalışıyor: router bir mesajı kaçırırsa agent'ın ne yapacağını görmek için. Testler veritabanının geçici bir kopyasında yapılıyor; A5 ve A6 için gizli talimatlı üç uydurma yorum sadece bu kopyaya ekleniyor.
@@ -176,7 +206,7 @@ Sonuçlar (`gemini-3.5-flash-lite`, temperature 1.0, her vaka bir kez; ayrıntı
 | Gerçek yorumlarda yanlış işaretleme | 42.691 yorumda 0 |
 | Log'da ham id | 0 |
 
-Dikkatle okunmalı:
+Okurken dikkat:
 
 - Belge en az 5 saldırı ve A1–A7'nin tamamını istiyor; bu set ikisini de karşılıyor. Metin için ≥%95 hedefini ölçmeye 13 vaka yetmez: tek bir hata sonucu %92'ye düşürür.
 - Saldırıların çoğunu model hiç görmedi; router ya da bir tool önce durdurdu. Modelin zararlı metne direnci, metnin modele ulaştığı 6 çalıştırmada ölçüldü.
@@ -253,6 +283,8 @@ python eval/check_access.py        # yabancı siparişler
 python eval/run_injection.py       # injection test seti, sadece kod testleri
 python eval/run_injection.py --model   # kod ve model testleri
 python eval/run_ops.py             # Ops Data Agent ve B2
+python eval/trace_report.py        # görev başına adım, token, maliyet ve süre
+python scripts/trace_view.py       # son turların trace sayfası (logs/trace.html)
 ```
 
 Etiket script'leri `eval/results/` içindeki cevapların etiketlerini tutuyor. Yeni bir çalıştırmada cevaplar değişir; tekrar okunup etiketlenmeleri gerekir.
@@ -273,8 +305,8 @@ src/guardrails/              SQL doğrulayıcı, şüpheli içerik işaretleme
 src/mcp_servers/             sipariş tool'larının MCP server'ı (shopops-orders)
 src/agents/                  ortak tool döngüsü, router, Support Agent, Ops Data Agent, tool tanımları, log
 src/display.py               kullanıcının gördükleri: kısa id'ler, onay özeti, sonuç tabloları
-scripts/                     veritabanı kurulumu ve kontrolleri, chat, demo müşteri, model bilgisi
-eval/                        golden set, B0 ve agent çalıştırmaları, etiketler, karşılaştırma, güvenlik kontrolleri
+scripts/                     veritabanı kurulumu ve kontrolleri, chat, demo müşteri, model bilgisi, trace sayfası
+eval/                        golden set, B0 ve agent çalıştırmaları, etiketler, karşılaştırma, güvenlik kontrolleri, trace raporu
 eval/results/                sonuç tabloları (CSV) ve comparison.md
 tests/                       unit testler (kural motoru, tool'lar, onay, döngü sınırları, injection, RAG)
 docs/                        veri bulguları, hata analizi, ekran görüntüleri
@@ -294,7 +326,7 @@ logs/                        agent log'u ve temsilci kuyruğu (repoda yok)
 
 ## Yol haritası
 
-- **Sırada:** adım adım trace, blog yazısı taslağı.
+- **Sırada:** blog yazısı taslağı.
 - **Son hafta:** bütün değerlendirme için tek komut, son README, proje belgesindeki yazılı soruların cevapları, temiz kurulum testi, v1.0.
 
 ## Yapay zekâ desteği
