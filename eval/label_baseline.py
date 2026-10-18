@@ -4,8 +4,12 @@
 #   yes-process: describes a process or rule that is not in any policy document.
 # Labels were decided by reading every answer against the policy texts.
 # Run: python eval/label_baseline.py
-import csv
+import sys
 from pathlib import Path
+
+# Let this script import eval/labels.py from the project root
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from eval.labels import apply_labels, report_changed
 
 PATH = Path(__file__).resolve().parent / "results" / "baseline.csv"
 
@@ -46,21 +50,20 @@ LABELS = {
     "O3": "no",
 }
 
+# Fingerprints of the answers the labels were made for (eval/labels.py)
+ANSWERS = {
+    "S1": "c3d0aa26b8bb", "S2": "bbf3fce0785b", "S3": "94800ad7a990", "S4": "375405b78ffc", "S5": "0ec4b3690255",
+    "S6": "b5f75580d385", "S7": "e89d0e57932d", "S8": "7953ac53fd2c", "S9": "ba392ca4ce6e", "S10": "8feb8c0f6635",
+    "S11": "cdc0fbc0fc8b", "S12": "a4500a1b819d", "S13": "58adb5fc6eef", "S14": "bfca70c17039", "S15": "461398589455",
+    "P1": "2fb5d9c8fac3", "P2": "7b1f33608522", "P3": "a7e82a84f226", "P4": "1f27251679d1", "P5": "a1c0982bdafc",
+    "P6": "1c803ba1f550", "P7": "394744fc4926", "A1": "5e1be80e66af", "A2": "e6000973d1c8", "A3": "23db4edc6403",
+    "A4": "e89fb2f9fdf2", "A5": "ba82a24fe35c", "A6": "63a4cca17d6e", "O1": "efb97fa67820", "O2": "e6ee6346ad01",
+    "O3": "ef8d05704bf7",
+}
+
 
 def main():
-    with PATH.open(encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        fields = reader.fieldnames
-        rows = list(reader)
-
-    for row in rows:
-        if row["id"] in LABELS:
-            row["hallucinated"] = LABELS[row["id"]]
-
-    with PATH.open("w", encoding="utf-8-sig", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(rows)
+    rows, changed = apply_labels(PATH, LABELS, ANSWERS)
 
     labelled = [r for r in rows if r["hallucinated"]]
     print(f"Labelled {len(labelled)}/{len(rows)} rows")
@@ -72,6 +75,7 @@ def main():
     main_rows = [r for r in labelled if r["group"] != "ops"]
     total_bad = sum(r["hallucinated"].startswith("yes") for r in main_rows)
     print(f"  total    {total_bad}/{len(main_rows)} = {total_bad / len(main_rows):.1%} (without ops)")
+    report_changed(changed)
 
 
 if __name__ == "__main__":

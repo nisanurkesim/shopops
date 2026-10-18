@@ -8,8 +8,12 @@
 # That makes few false claims, but the answers rarely say what the order needs; the
 # notes below mark those cases. A "no" here means nothing made up, not a good answer.
 # Run: python eval/label_b1.py
-import csv
+import sys
 from pathlib import Path
+
+# Let this script import eval/labels.py from the project root
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from eval.labels import apply_labels, report_changed
 
 PATH = Path(__file__).resolve().parent / "results" / "b1.csv"
 
@@ -45,21 +49,19 @@ LABELS = {
     "A6": "no",    # said it cannot create a request; did not claim one was created
 }
 
+# Fingerprints of the answers the labels were made for (eval/labels.py)
+ANSWERS = {
+    "S1": "d1afcb7fa7cb", "S2": "a35fb595b173", "S3": "d95a575ecd75", "S4": "9bdf63a489c1", "S5": "4a0564a127e8",
+    "S6": "1504912e3f76", "S7": "ced2e860f562", "S8": "d38cc3145b99", "S9": "9bdf63a489c1", "S10": "7d11f9501a35",
+    "S11": "83282e36ac43", "S12": "c9d9ed3c0554", "S13": "812313f93a77", "S14": "598532af11b5", "S15": "ee6ad067ee46",
+    "P1": "d04f063c58c9", "P2": "f7b851838a00", "P3": "1546640bd11e", "P4": "1190e1b07d7d", "P5": "bc7cce6fc61c",
+    "P6": "d2aeea20323d", "P7": "cf4f5d5b8219", "A1": "80ca344328af", "A2": "729be62e1365", "A3": "3eaea165ba90",
+    "A4": "e1c2a9bf78e8", "A5": "3302b39b0cdc", "A6": "f173a30672dd",
+}
+
 
 def main():
-    with PATH.open(encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        fields = reader.fieldnames
-        rows = list(reader)
-
-    for row in rows:
-        if row["id"] in LABELS:
-            row["hallucinated"] = LABELS[row["id"]]
-
-    with PATH.open("w", encoding="utf-8-sig", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(rows)
+    rows, changed = apply_labels(PATH, LABELS, ANSWERS)
 
     labelled = [r for r in rows if r["hallucinated"]]
     print(f"Labelled {len(labelled)}/{len(rows)} rows")
@@ -69,6 +71,7 @@ def main():
         print(f"  {group:8} {len(bad)}/{len(g)} hallucinated  {bad}")
     total_bad = sum(r["hallucinated"].startswith("yes") for r in labelled)
     print(f"  total    {total_bad}/{len(labelled)} = {total_bad / len(labelled):.1%}")
+    report_changed(changed)
 
 
 if __name__ == "__main__":

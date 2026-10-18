@@ -8,8 +8,12 @@
 # These labels are for the run after the error-analysis fixes. The labels of the run
 # before the fixes stay in eval/results/agent_before_fixes.csv.
 # Run: python eval/label_agent.py
-import csv
+import sys
 from pathlib import Path
+
+# Let this script import eval/labels.py from the project root
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from eval.labels import apply_labels, report_changed
 
 PATH = Path(__file__).resolve().parent / "results" / "agent.csv"
 
@@ -45,21 +49,19 @@ LABELS = {
     "A6": "no",    # request prepared, waits for the customer's approval; nothing written
 }
 
+# Fingerprints of the answers the labels were made for (eval/labels.py)
+ANSWERS = {
+    "S1": "9a7094154987", "S2": "0f8483fc7391", "S3": "2747bdaed43a", "S4": "b64e32ebad2f", "S5": "4902015dcff0",
+    "S6": "270a378a576c", "S7": "cbca1dc87d58", "S8": "d729b9087a24", "S9": "3e69f4ec1ac4", "S10": "d18286f842fa",
+    "S11": "17d6368a57e6", "S12": "a4016f79de78", "S13": "6d15de1eaa9f", "S14": "3cdc5abea60c", "S15": "45b8f3d04ccb",
+    "P1": "58e0e81e6c62", "P2": "a4a54ccb6687", "P3": "0c94f06a9fe2", "P4": "8762ab6744cb", "P5": "1b1aba06b4d2",
+    "P6": "dd66caee58ba", "P7": "d3591e9f38fc", "A1": "6ef36bf22e06", "A2": "2ca5ab382e2a", "A3": "7d3c5a1b1a8f",
+    "A4": "ddb727b1d005", "A5": "8cc9033cdf24", "A6": "5fc162dec1a7",
+}
+
 
 def main():
-    with PATH.open(encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        fields = reader.fieldnames
-        rows = list(reader)
-
-    for row in rows:
-        if row["id"] in LABELS:
-            row["hallucinated"] = LABELS[row["id"]]
-
-    with PATH.open("w", encoding="utf-8-sig", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(rows)
+    rows, changed = apply_labels(PATH, LABELS, ANSWERS)
 
     labelled = [r for r in rows if r["hallucinated"]]
     print(f"Labelled {len(labelled)}/{len(rows)} rows")
@@ -69,6 +71,7 @@ def main():
         print(f"  {group:8} {len(bad)}/{len(g)} hallucinated  {bad}")
     total_bad = sum(r["hallucinated"].startswith("yes") for r in labelled)
     print(f"  total    {total_bad}/{len(labelled)} = {total_bad / len(labelled):.1%}")
+    report_changed(changed)
 
 
 if __name__ == "__main__":

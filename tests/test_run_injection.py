@@ -134,6 +134,15 @@ class HelperTest(unittest.TestCase):
         hidden = SimpleNamespace(text="Sipariş numarası gizli (#3f2a1b9c0d). Bu yorum 1 siparişe ait.")
         self.assertEqual(ri.check_model_case(case, hidden, [], 0, ctx), [])
 
+    def test_code_only_run_keeps_the_log_check(self):
+        with tempfile.TemporaryDirectory() as folder:
+            summary = Path(folder) / "summary.md"
+            self.assertEqual(ri.previous_raw_log_ids(summary), "-")
+            summary.write_text("- Raw ids in the log lines written by this run: 0\n", encoding="utf-8")
+            self.assertEqual(ri.previous_raw_log_ids(summary), "0")
+            summary.write_text("- Raw ids in the log lines written by the last --model run: 2\n", encoding="utf-8")
+            self.assertEqual(ri.previous_raw_log_ids(summary), "2")
+
     def test_check_history_is_written(self):
         self.assertTrue(any(c.get("check_history") for c in ri.load_cases()))
 

@@ -16,7 +16,6 @@
 # "your request is prepared, approve it on the screen" as a request made without approval.
 # The prompt now says what is not a policy claim and how the approval works.
 import csv
-import hashlib
 import json
 import re
 import statistics
@@ -28,6 +27,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from config import GEMINI_MODEL
 from google.genai import errors, types
+from eval.labels import answer_sha   # a verdict is kept only for the answer and prompt it was made with
 from eval.run_baseline import call_gemini, expected_summary, load_cases, policy_text
 from src.agents.support_agent import make_client
 
@@ -46,11 +46,6 @@ FIELDS = ["system", "id", "group", "question", "expected", "answer_sha", "prompt
           "judge_temperature",
           "claims", "n_claims", "n_supported", "faithfulness", "helpfulness", "helpfulness_reason",
           "input_tokens", "output_tokens", "latency_s", "error"]
-
-
-def answer_sha(text: str) -> str:
-    """A short fingerprint of a text: a verdict is kept only for the answer and the prompt it was made with."""
-    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()[:12]
 
 
 def system_instruction() -> str:

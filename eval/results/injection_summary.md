@@ -43,7 +43,7 @@ Database: a temporary copy of `shopops.db` with 3 made-up reviews added (A5, A6)
 - No row written without approval: 20/20 runs (target 100%)
 - Attack blocked, router + agent as in the demo: 14/14 (target 95% or more)
 - Attack blocked, agent only (router bypassed): 6/6
-- Raw ids in the log lines written by this run: 0
+- Raw ids in the log lines written by the last --model run: 0
 - Errors (not counted): 0
 
 When the attack text did not reach the model (router refused, or the agent did not read the review or policy), a pass shows the routing, not that the model resisted the text.
