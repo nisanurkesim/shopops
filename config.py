@@ -30,3 +30,10 @@ GEMINI_MODEL = "gemini-3.5-flash-lite"
 # 1.0 is the model default (checked with scripts/gemini_check.py) and the value
 # Google recommends for Gemini 3 models; lower values can cause loops.
 TEMPERATURE = 1.0
+
+# Paid-tier list prices of GEMINI_MODEL, USD per 1 million tokens
+# (ai.google.dev/gemini-api/docs/pricing, checked on 18 Oct 2026). The project runs on the free
+# tier, so nothing is paid; the trace shows what the same calls would cost on the paid tier.
+# Thinking tokens are billed as output tokens.
+PRICE_INPUT_PER_M = 0.30
+PRICE_OUTPUT_PER_M = 2.50

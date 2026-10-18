@@ -13,7 +13,7 @@ from google import genai
 from google.genai import errors, types
 
 from config import GEMINI_MODEL, PROJECT_ROOT, TEMPERATURE
-from src.agents.trace import outcome, write_event
+from src.agents.trace import cost_usd, outcome, result_summary, write_event
 
 MAX_STEPS = 8          # model calls per user message (G10)
 MAX_SAME_CALL = 2      # the same tool with the same arguments, at most twice (G10)
@@ -38,6 +38,8 @@ class Step:
     tool: str
     args: dict
     result: dict
+    latency_s: float = 0.0   # time the tool itself took
+    call: int = 0            # index of the model call (in model_calls) that asked for this tool
 
 
 @dataclass
@@ -46,9 +48,14 @@ class AgentReply:
     steps: list[Step] = field(default_factory=list)
     input_tokens: int = 0
     output_tokens: int = 0
+    thinking_tokens: int = 0      # billed as output, counted apart from output_tokens
     stop_reason: str = "answer"   # answer | max_steps | api_error
     latency_s: float = 0.0
     model_calls: list[dict] = field(default_factory=list)   # one entry per model call: time, tokens, error
+
+    @property
+    def cost_usd(self) -> float:
+        return cost_usd(self.input_tokens, self.output_tokens, self.thinking_tokens)
 
 
 def make_client() -> genai.Client:
@@ -106,9 +113,13 @@ class ToolAgent:
             "model": self.model,
             "message": message,
             "reply": reply.text,
-            "steps": [{"tool": s.tool, "args": s.args, "outcome": outcome(s.result)} for s in reply.steps],
+            "steps": [{"tool": s.tool, "args": s.args, "outcome": outcome(s.result), "call": s.call,
+                       "latency_s": s.latency_s, "result": result_summary(s.tool, s.result)}
+                      for s in reply.steps],
             "input_tokens": reply.input_tokens,
             "output_tokens": reply.output_tokens,
+            "thinking_tokens": reply.thinking_tokens,
+            "cost_usd": reply.cost_usd,
             "latency_s": reply.latency_s,
             "model_calls": reply.model_calls,
             "stop_reason": reply.stop_reason,
@@ -132,10 +143,15 @@ class ToolAgent:
 
             usage = response.usage_metadata
             if usage is not None:
+                thinking = getattr(usage, "thoughts_token_count", None) or 0
                 reply.input_tokens += usage.prompt_token_count or 0
                 reply.output_tokens += usage.candidates_token_count or 0
-                reply.model_calls[-1]["input_tokens"] = usage.prompt_token_count or 0
-                reply.model_calls[-1]["output_tokens"] = usage.candidates_token_count or 0
+                reply.thinking_tokens += thinking
+                last = reply.model_calls[-1]
+                last["input_tokens"] = usage.prompt_token_count or 0
+                last["output_tokens"] = usage.candidates_token_count or 0
+                last["thinking_tokens"] = thinking
+                last["cost_usd"] = cost_usd(last["input_tokens"], last["output_tokens"], thinking)
 
             candidate = response.candidates[0] if response.candidates else None
             if candidate is None or candidate.content is None:
@@ -157,11 +173,14 @@ class ToolAgent:
                 args = dict(call.args or {})
                 key = (call.name, json.dumps(args, sort_keys=True, default=str))
                 call_counts[key] = call_counts.get(key, 0) + 1
+                tool_start = time.perf_counter()
                 if call_counts[key] > MAX_SAME_CALL:
                     result = REPEATED_CALL_RESULT
                 else:
                     result = self._run_tool(call.name, args)
-                reply.steps.append(Step(call.name, args, result))
+                reply.steps.append(Step(call.name, args, result,
+                                        latency_s=round(time.perf_counter() - tool_start, 3),
+                                        call=len(reply.model_calls) - 1))
                 result_parts.append(types.Part.from_function_response(name=call.name, response=result))
             self.history.append(types.Content(role="user", parts=result_parts))
 

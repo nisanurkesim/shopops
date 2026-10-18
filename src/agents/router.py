@@ -13,7 +13,7 @@ from google.genai import types
 
 from config import GEMINI_MODEL, TEMPERATURE
 from src.agents.base import make_client
-from src.agents.trace import write_event
+from src.agents.trace import cost_usd, write_event
 
 INTENTS = ("support", "ops_metric", "review_insight", "out_of_scope")
 
@@ -60,6 +60,7 @@ class Route:
     message: str | None        # the answer to show when not allowed
     input_tokens: int = 0
     output_tokens: int = 0
+    thinking_tokens: int = 0
     latency_s: float = 0.0
     error: str | None = None   # the call failed; the default route was used
 
@@ -108,6 +109,7 @@ class Router:
             if usage is not None:
                 route.input_tokens = usage.prompt_token_count or 0
                 route.output_tokens = usage.candidates_token_count or 0
+                route.thinking_tokens = getattr(usage, "thoughts_token_count", None) or 0
             intent = parse_intent(response.text)
             if intent is None:
                 route.error = f"no label in the answer: {(response.text or '')[:60]!r}"
@@ -121,6 +123,10 @@ class Router:
         if self.log_path is not None:
             write_event(self.log_path, {"event": "route", "session": session_type, "intent": route.intent,
                                         "allowed": route.allowed, "input_tokens": route.input_tokens,
-                                        "output_tokens": route.output_tokens, "latency_s": route.latency_s,
+                                        "output_tokens": route.output_tokens,
+                                        "thinking_tokens": route.thinking_tokens,
+                                        "cost_usd": cost_usd(route.input_tokens, route.output_tokens,
+                                                             route.thinking_tokens),
+                                        "latency_s": route.latency_s,
                                         "error": route.error})
         return route
