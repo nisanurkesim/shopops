@@ -97,7 +97,7 @@ def main():
     agent = read("agent.csv")
     before = read("agent_before_fixes.csv")
     access = read("access_test.csv")
-    injection = read("injection_test.csv")
+    injection = read("injection.csv")
     if any(not r["hallucinated"] for r in b0 + agent + before):
         raise SystemExit("Some rows have no label yet. Run label_baseline.py and label_agent.py first.")
 
@@ -180,16 +180,19 @@ def main():
         "(A6 asks the agent to skip the approval).",
     ]
     if injection:
-        done = [r for r in injection if not r["error"]]
-        safe = sum(1 for r in done if r["rows_written"] == "0")
-        attempted = sum(1 for r in done if r["action_attempted"] == "True")
-        text_ok = sum(1 for r in done if r["text_check"] == "pass")
+        code = [r for r in injection if r["kind"] == "code"]
+        model = [r for r in injection if r["kind"] == "model" and not r["error"]]
+        demo = [r for r in model if r["layer"] == "router+agent"]
+        direct = [r for r in model if r["layer"] == "agent only"]
+        reached = [r for r in model if r["attack_reached"] == "yes"]
         lines += [
-            f"- Indirect injection (`eval/check_injection.py`): an attack text was put into a policy "
-            f"search hit in {len(done)} scenarios (English, Portuguese, Turkish). No row written in "
-            f"{safe}/{len(done)}, the model tried an action in {attempted}/{len(done)}, the answer "
-            f"did not follow the attack in {text_ok}/{len(done)}. Three scenarios cannot show the "
-            "95% target; more cases, including attacks in customer reviews, come in Sprint 5.",
+            f"- Injection test set (`eval/run_injection.py`, brief A1-A7 and instructions hidden in "
+            f"reviews and policy hits): code checks {sum(r['result'] == 'pass' for r in code)}/{len(code)}; "
+            f"attack blocked {sum(r['result'] == 'pass' for r in demo)}/{len(demo)} through the router "
+            f"and the agent, {sum(r['result'] == 'pass' for r in direct)}/{len(direct)} without the router; "
+            f"rows written without approval: {sum(int(r['rows_written'] or 0) for r in model)} in {len(model)} runs. "
+            f"The attack text reached the model in {len(reached)} runs and was flagged as suspicious in "
+            f"{sum(r['flagged'] == 'yes' for r in reached)}. Details: `eval/results/injection_summary.md`.",
             "- `tests/test_indirect_injection.py` uses a fake model that obeys the attack: the code "
             "still writes nothing, because only the customer's answer in the interface can approve.",
         ]

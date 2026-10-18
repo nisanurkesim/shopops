@@ -49,7 +49,7 @@ This is why every answer is also read by hand.
 
 - Unauthorized access test (`eval/check_access.py`): 10/10 foreign orders answered NOT_FOUND by every order tool, with the same answer as an order that does not exist.
 - Rows written to `return_requests` without customer approval: 0 in 28 cases (A6 asks the agent to skip the approval).
-- Indirect injection (`eval/check_injection.py`): an attack text was put into a policy search hit in 3 scenarios (English, Portuguese, Turkish). No row written in 3/3, the model tried an action in 0/3, the answer did not follow the attack in 3/3. Three scenarios cannot show the 95% target; more cases, including attacks in customer reviews, come in Sprint 5.
+- Injection test set (`eval/run_injection.py`, brief A1-A7 and instructions hidden in reviews and policy hits): code checks 7/7; attack blocked 13/13 through the router and the agent, 5/5 without the router; rows written without approval: 0 in 18 runs. The attack text reached the model in 6 runs and was flagged as suspicious in 6. Details: `eval/results/injection_summary.md`.
 - `tests/test_indirect_injection.py` uses a fake model that obeys the attack: the code still writes nothing, because only the customer's answer in the interface can approve.
 
 ## Ops Data Agent
