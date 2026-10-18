@@ -3,6 +3,7 @@
 # way to reach them (G5).
 from google.genai import types
 
+from src.guardrails.injection_flag import flag_result
 from src.tools.metrics import list_metrics, load_semantic_layer, run_metric
 from src.tools.run_sql import run_sql
 
@@ -67,7 +68,8 @@ def execute_ops_tool(name: str, args: dict) -> dict:
             return run_metric(args["metric_name"], args.get("filters") or {}, args.get("group_by") or [],
                               min_n=args.get("min_n"), sort=args.get("sort"), limit=args.get("limit"))
         if name == "run_sql":
-            return run_sql(args["query"])
+            # Rows can hold review texts written by customers: flagged before the model reads them (A5)
+            return flag_result(run_sql(args["query"]))
         return {"error": "UNKNOWN_TOOL", "message": f"There is no tool called '{name}'."}
     except KeyError as e:
         return {"error": "MISSING_ARGUMENT", "message": f"Missing argument: {e}"}

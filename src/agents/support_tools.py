@@ -2,6 +2,7 @@
 # The LLM never passes a customer id. Every tool gets the customer from the Session.
 from google.genai import types
 
+from src.guardrails.injection_flag import flag_result
 from src.knowledge.policies import search_policies
 from src.returns import VALID_REASONS
 from src.tools.escalation import PRIORITIES, escalate_to_human
@@ -126,10 +127,11 @@ def execute_tool(session: Session, name: str, args: dict) -> dict:
             return check_return_eligibility(session, args["order_id"], args["reason"])
         if name == "search_policies":
             hits = search_policies(args["query"], k=3)
-            return {"results": [
+            # Policy texts could hide instructions: flagged before the model reads them (A5)
+            return flag_result({"results": [
                 {"title": h["title"], "section": h["section"], "text": h["text"], "score": h["score"]}
                 for h in hits
-            ]}
+            ]})
         if name == "escalate_to_human":
             return escalate_to_human(session, args["summary"], args.get("priority", "normal"))
         if name in WRITE_TOOLS:   # never run here: the agent handles approval

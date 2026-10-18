@@ -29,7 +29,8 @@ def short(result: dict, limit: int = 150) -> str:
 def step_text(step, limit: int = 150) -> str:
     """One tool step on one line: tool(arguments) -> result."""
     args = step.args.get("query") or step.args
-    return f"{step.tool}({hide_ids(str(args))}) -> {short(step.result, limit)}"
+    flag = "[şüpheli içerik işaretlendi] " if step.result.get("suspicious_content") else ""
+    return f"{step.tool}({hide_ids(str(args))}) -> {flag}{short(step.result, limit)}"
 
 
 def approval_lines(summary: dict) -> list[str]:
