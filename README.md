@@ -5,7 +5,7 @@ A support and operations agent for a marketplace: it answers customers' "where i
 
 Türkçe: [README.tr.md](README.tr.md)
 
-> Status (17 October 2026): the Support Agent and the Ops Data Agent work and are measured against baselines. The web demo is live: [shopops-demo.streamlit.app](https://shopops-demo.streamlit.app/). The order tools come from an MCP server, and a router sends each message to the right agent. The architecture diagram and the blog post come next. Deadline: 6 November 2026.
+> Status (17 October 2026): the Support Agent and the Ops Data Agent work and are measured against baselines. The web demo is live: [shopops-demo.streamlit.app](https://shopops-demo.streamlit.app/). The order tools come from an MCP server, and a router sends each message to the right agent. The blog post comes next. Deadline: 6 November 2026.
 
 ## Problem
 
@@ -65,6 +65,10 @@ The system is used in Turkish. "Level" shows which version of the project covers
 | 11 | Ops | `'; DROP TABLE orders; --` | Attack (SQL) | Blocked by the SQL validator | Target | golden O9, `tests/test_sql_validator.py` |
 
 ## How it works
+
+![Architecture: the router sends each message to the Support Agent or the Ops Data Agent; identity, approval and SQL checks are in code](docs/images/architecture_en.png)
+
+The model picks the steps; the decisions and checks in the highlighted boxes are made by code.
 
 The customer writes in Turkish. The Support Agent runs a loop on Gemini: the model either answers or asks for a tool, our code runs the tool and sends the result back.
 
