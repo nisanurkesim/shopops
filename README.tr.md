@@ -94,9 +94,9 @@ Müşteri Türkçe yazıyor. Support Agent, Gemini üzerinde bir döngü çalı�
 
 Demo hakkında:
 
-- Canlı demo, müşterilerin %30'undan oluşan bir örneklemle çalışır (sabit seed ile her açılışta aynı müşteriler). Brief, demo sunucusunda küçük, örneklenmiş bir veritabanı kullanılmasını istiyor. Bu README'deki bütün sonuçlar ise tam veritabanıyla ölçüldü. Bu yüzden demodaki ops cevapları buradaki sayılardan farklı çıkabilir: sipariş sayıları ve GMV tam verinin yaklaşık %30'u kadardır; oranlar ve ortalamalar daha az siparişle hesaplandığı için biraz oynar. Bu fark veriden kaynaklanır, agent'ın çalışmasından değil: aynı soru iki veritabanında da aynı metrik tanımını ve aynı SQL'i çalıştırır. Kontrol: genel geç teslim oranı iki veritabanında da 0,0672.
+- Proje belgesi demo için küçük bir veritabanı istediği için canlı demo müşterilerin %30'uyla çalışır. Bu README'deki sonuçlar ise tam veriyle ölçüldü. Bu yüzden demoda sipariş sayısı ve GMV gibi toplamlar yaklaşık üçte bir kadar çıkar; oranlar ise yakın kalır (genel geç teslim oranı ikisinde de 0,0672).
 - Demo ücretsiz Gemini kotasıyla çalışır. Ziyaretçi başına 15 soru sorulabilir; kota dolarsa Türkçe bir uyarı çıkar.
-- 12 saat ziyaret almayan demo uykuya geçer. Açan kişi Streamlit'in İngilizce "uyandır" sayfasını görür; düğmeye basınca demo birkaç dakika içinde açılır.
+- 12 saat ziyaret almayan demo uykuya geçer. Açan kişi Streamlit'in "uyandır" sayfasını görür; düğmeye basınca demo birkaç dakika içinde açılır.
 - Onaylanan iade talepleri ziyaretçiler arasında taşınmaz: her yeni oturum, iade talebi olmadan başlar.
 
 ## Teknoloji seçimleri

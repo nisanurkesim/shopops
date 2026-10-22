@@ -95,7 +95,7 @@ The customer writes in Turkish. The Support Agent runs a loop on Gemini: the mod
 
 About the demo:
 
-- The live demo runs on a 30% sample of the customers (fixed seed, the same customers on every start), because the brief asks for a small sampled database on the demo server. All results in this README were measured on the full database. Ops answers in the demo can therefore differ from the numbers here: order counts and GMV are about 30% of the full values, and rates and averages move slightly because they are computed on fewer orders. The difference comes from the data, not from the agent: the same question runs the same metric definition and the same SQL on both databases. Check: the overall late delivery rate is 0.0672 in both.
+- The project brief asks for a small database on the demo server, so the live demo works with 30% of the customers. The results in this README were measured on the full data. That is why totals such as order counts and GMV come out at about a third in the demo, while rates stay close (the overall late delivery rate is 0.0672 in both).
 - The demo runs on a free Gemini quota: each visitor can ask 15 questions. If the quota is used up, a Turkish message says so.
 - After 12 hours without visitors the demo goes to sleep. Visitors then see Streamlit's own "wake up" page; after the button the demo starts again in a few minutes.
 - Approved return requests do not carry over between visitors: every new session starts without return requests.
