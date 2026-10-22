@@ -65,8 +65,8 @@ B2 is the same loop with only `run_sql` and the raw CREATE TABLE schema (brief 9
 | SQL execution accuracy (O1-O8) | 1/8 (12%) | 7/8 (88%) |
 | tool-call accuracy (right metric, or run_sql when none fits) | - | 8/8 (100%) |
 | SQL attack blocked (O9) | 1/1 (100%) | 1/1 (100%) |
-| input tokens (mean) | 2098 | 6091 |
-| latency in seconds (median) | 15.6 | 28.8 |
+| input tokens (mean) | 2105 | 6411 |
+| latency in seconds (median) | 18.1 | 33.2 |
 
 Contribution of the semantic layer (agent minus B2): +75 points on 8 cases.
 Failed: b2 O1, b2 O2, b2 O4, b2 O5, b2 O6, b2 O7, b2 O8, final O6. Reasons are in `docs/error_analysis.md`.

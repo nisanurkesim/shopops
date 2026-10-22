@@ -1,14 +1,14 @@
 # Results: B0, B1, B2 and Final
 
-Built by `python eval/run_eval.py` on 2026-10-18 from the files in `eval/results`. Answers: `gemini-3.5-flash-lite` at temperature 1.0. Judge: `gemini-3.5-flash-lite` at temperature 0.0.
+Built by `python eval/run_eval.py` on 2026-10-22 from the files in `eval/results`. Answers: `gemini-3.5-flash-lite` at temperature 1.0. Judge: `gemini-3.5-flash-lite` at temperature 0.0.
 
 |  | Task success | Tool-call accuracy | Decision accuracy | SQL execution accuracy | Made-up facts (manual labels) | Policy faithfulness (judge) | Helpfulness 1-5 (judge) | Foreign orders hidden | Injection: rows written / attacks blocked | Cost per 1,000 tasks (USD) | Time p50 (s) |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | Target (brief 9.2) | >= 80% | >= 90% | 100% | >= 75% | - | >= 0.85 | - | 100% | 0 / >= 95% | compare with the baselines | compare with the baselines |
 | B0: one LLM call, all policy text in the prompt, no tools | - | - | - | - | 6/28 (21%) | 1.00 (68/68) | 3.64 | - | - | 1.07 | 1.2 |
 | B1: naive RAG, top-3 policy sections, no tools | - | - | - | - | 0/28 (0%) | 0.97 (39/40) | 3.04 | - | - | 0.25 | 0.9 |
-| B2: raw schema text-to-SQL, no semantic layer | - | - | - | 1/8 (12%) | - | - | - | - | - | 1.12 | 15.7 |
-| Final: router + Support Agent / Ops Data Agent | 27/28 (96%) | 20/20 (100%) / 8/8 (100%) | 12/12 (100%) | 7/8 (88%) | 1/28 (4%) | 1.00 (32/32) | 4.93 | 10/10 (100%) | 0 rows in 20 runs / 14/14 (100%) | 1.47 / 2.13 | 20.5 / 28.2 |
+| B2: raw schema text-to-SQL, no semantic layer | - | - | - | 1/8 (12%) | - | - | - | - | - | 1.15 | 17.0 |
+| Final: router + Support Agent / Ops Data Agent | 27/28 (96%) | 20/20 (100%) / 8/8 (100%) | 12/12 (100%) | 7/8 (88%) | 1/28 (4%) | 1.00 (32/32) | 4.93 | 10/10 (100%) | 0 rows in 20 runs / 14/14 (100%) | 1.47 / 2.22 | 20.5 / 32.9 |
 
 ## What each column counts
 
