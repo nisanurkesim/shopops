@@ -64,7 +64,7 @@ Used later for the README and the blog post. "Result" lines refer to the eval ru
 - Cause (S15): the tool gave `decision_text: "İade süresi geçmiş"` next to a refund amount. Rule 12 tells the model to use this text, so it repeated it and stopped. The automatic check passed, because it looks at the tool result, not at the answer.
 - Cause (P5): not clear. The rule is a combination ("window passed" and "10+ days late" and "30 days not passed"), and the model shortened it wrongly. One run, so it may not repeat.
 - Fix (S15): when the window has passed but there is a freight refund, `decision_text` now says so ("İade süresi geçmiş; ürün geç geldiği için yalnızca kargo ücreti için talep açılabilir"), tested in `tests/test_tool_texts.py`.
-- Result: to be measured in the next eval run. P5 has no code fix yet.
+- Result: the S15 fix is covered by a unit test (`tests/test_tool_texts.py`). The eval was not run again after it, so S15 in `eval/results/agent.csv` and in the results table is the answer from before this fix. P5 has no code fix yet.
 
 ## 10. Ops agent: its own SQL counted items instead of orders
 - What happened: first terminal test of the Ops Data Agent (2026-10-16). Question: "En az 100 siparişi olan kategoriler arasında geç teslim oranı en yüksek 5'i hangileri?" No metric could do "at least 100" and "top 5", so the agent wrote its own SQL. It joined `order_items` and divided `SUM(late)` over item rows by `COUNT(DISTINCT order_id)`. An order with several items was counted several times above the line and once below it, so the rates were too high and 4 of the 5 categories were wrong (for example christmas_supplies 12.00% and office_furniture 10.61% in the list; the correct top 5 is audio 11.78%, home_confort 9.44%, fashion_underwear_beach 9.40%, books_technical 8.20%, office_furniture 8.05%).
@@ -83,8 +83,10 @@ Used later for the README and the blog post. "Result" lines refer to the eval ru
   - O8: a different reading of "seller late": SP first with 9.72% instead of PR with 7.68%.
 - Cause: none of these is a syntax error, so self-correction cannot catch them. They are definition errors, which the brief names as the main risk of text-to-SQL.
 - Result: the Ops Data Agent matched 7 of 8 with the semantic layer, so the layer added 75 points. It also cost about three times the input tokens (list_metrics and a longer prompt) and more time.
+- Measured again on 2026-10-22, after the SQL validator got the rule that hides customer and order ids: the same 1 of 8 with the same definition errors. The new rule did not block any query of B2 or the Ops Data Agent.
 
 ## 12. Ops agent, O6: review scores not averaged per order
 - What happened: same run. O6 needs `run_sql` (no metric splits review scores by late and on-time delivery). The agent's query averaged review rows instead of first averaging per order: 2.2715 instead of 2.2723 for late orders. Shown with two decimals both are 2.27, but 547 orders have more than one review, so the definition differs and the execution match fails.
 - Cause: the prompt warns that `reviews` can repeat an order, but the agent still joined it directly.
 - Possible fix: a dimension "delivered late / on time" in `metrics.yaml`, so `avg_review_score` grouped by it answers O6 with the official definition and no free SQL is needed.
+- Result: not fixed. Measured again on 2026-10-22: the same kind of query and the same 2.2715. The metric is on the "if time allows" list.
