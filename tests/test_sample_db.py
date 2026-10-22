@@ -34,6 +34,7 @@ class TestApplySample(unittest.TestCase):
 
     def setUp(self):
         self.con = make_db()
+        self.addCleanup(self.con.close)
         apply_sample(self.con, {"U1", "U3"})   # U2 is not kept
 
     def test_only_kept_customers_remain(self):
@@ -60,6 +61,7 @@ class TestChooseCustomers(unittest.TestCase):
 
     def setUp(self):
         self.con = sqlite3.connect(":memory:")
+        self.addCleanup(self.con.close)
         self.con.execute("CREATE TABLE customers (customer_id TEXT, customer_unique_id TEXT)")
         self.con.executemany("INSERT INTO customers VALUES (?, ?)",
                              [(f"c{i}", f"U{i:03}") for i in range(100)])
