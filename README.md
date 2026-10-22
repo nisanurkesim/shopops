@@ -122,8 +122,8 @@ The final system was compared with three baselines. All of them use the same mod
 |---|---|---|---|---|---|---|---|
 | B0 | - | 6/28 (21%) | 1.00 | 3.64 | - | $1.07 | 1.2 s |
 | B1 | - | 0/28 (0%) | 0.97 | 3.04 | - | $0.25 | 0.9 s |
-| B2 | - | - | - | - | 1/8 (12%) | $1.12 | 15.7 s |
-| Final | 27/28 (96%) | 1/28 (4%) | 1.00 | 4.93 | 7/8 (88%) | $1.47 / $2.13 | 20.5 / 28.2 s |
+| B2 | - | - | - | - | 1/8 (12%) | $1.15 | 17.0 s |
+| Final | 27/28 (96%) | 1/28 (4%) | 1.00 | 4.93 | 7/8 (88%) | $1.47 / $2.22 | 20.5 / 32.9 s |
 
 What the columns mean:
 
@@ -149,7 +149,7 @@ Read with care:
 - B1 makes the fewest false claims, but not because it answers well. It repeats the sections it gets almost word for word and puts most answers as conditions ("if 30 days have passed..."). It says nothing wrong, but it also says nothing about the order that was asked about. The helpfulness score shows this.
 - The judge is the same model as the systems it scores. After the first run I corrected its prompt once: it counted order dates and amounts as policy claims and read "approve it on the screen" as an action without approval. The prompt was changed after seeing the results, so these numbers may be a little optimistic.
 - I checked the judge's decisions by hand on 12 answers; we fully agreed on 7 (58%). The judge misses some unsupported claims: a return step B0 made up, and the agent's wrong freight rule in P5. So the faithfulness numbers should be read as an upper bound. The manual labels are the main measure of made-up facts.
-- B2 was measured before the SQL validator got the rule that hides customer and order ids. A new run could give a different result.
+- B2 and the Ops Data Agent were measured again after the SQL validator got the rule that hides customer and order ids. Accuracy did not change, because the ops questions in the golden set do not ask for these columns.
 
 **Ops Data Agent** (8 ops questions, compared with a hand-written golden SQL). B2 is the same loop with only `run_sql` and the raw table schema.
 
@@ -190,8 +190,8 @@ Per task, on the golden set questions. Cost is computed with the paid-tier price
 |---|---|---|---|---|---|
 | B0 | 28 | 0.0 | 1.07 | 1.2 | 8.1 |
 | Support Agent | 28 | 1.3 | 1.47 | 20.5 | 91.9 |
-| B2 | 9 | 1.0 | 1.12 | 15.7 | 28.9 |
-| Ops Data Agent | 9 | 1.8 | 2.13 | 28.2 | 45.3 |
+| B2 | 9 | 1.0 | 1.15 | 17.0 | 26.0 |
+| Ops Data Agent | 9 | 1.9 | 2.22 | 32.9 | 52.8 |
 | Router | 43 | 0.0 | 0.09 | 0.6 | 1.6 |
 
 Median time: half of the questions took less than this. p95 time: 95% of the questions took less than this, so it shows the slowest few.

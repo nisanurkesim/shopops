@@ -121,8 +121,8 @@ Final sistem üç baseline ile karşılaştırıldı. Üçü de aynı modeli kul
 |---|---|---|---|---|---|---|---|
 | B0 | – | 6/28 (%21) | 1,00 | 3,64 | – | 1,07 $ | 1,2 sn |
 | B1 | – | 0/28 (%0) | 0,97 | 3,04 | – | 0,25 $ | 0,9 sn |
-| B2 | – | – | – | – | 1/8 (%12) | 1,12 $ | 15,7 sn |
-| Final | 27/28 (%96) | 1/28 (%4) | 1,00 | 4,93 | 7/8 (%88) | 1,47 $ / 2,13 $ | 20,5 / 28,2 sn |
+| B2 | – | – | – | – | 1/8 (%12) | 1,15 $ | 17,0 sn |
+| Final | 27/28 (%96) | 1/28 (%4) | 1,00 | 4,93 | 7/8 (%88) | 1,47 $ / 2,22 $ | 20,5 / 32,9 sn |
 
 Sütunların anlamı:
 
@@ -148,7 +148,7 @@ Okurken dikkat:
 - B1 en az uyduran sistem, ama bunun nedeni iyi cevap vermesi değil. Eline gelen bölümleri neredeyse aynen tekrar ediyor ve çoğu cevabı şartlı kuruyor ("30 gün geçtiyse…"). Yanlış bir şey söylemiyor, ama sorulan siparişe dair de bir şey söylemiyor. Bu fark yardımcı olma puanında görünüyor.
 - Hakem, puanladığı sistemlerle aynı model. İlk çalıştırmadan sonra prompt'u bir kez düzelttim, çünkü siparişe özel tarih ve tutarları politika iddiası sayıyor, "ekrandan onaylayın" cümlesini de onaysız işlem sanıyordu. Prompt sonuçlar görüldükten sonra değiştiği için bu sayılar biraz iyimser olabilir.
 - Hakemin kararlarını 12 cevapta elle kontrol ettim; 7'sinde tam uyuştuk (%58). Hakem desteklenmeyen bazı iddiaları kaçırıyor: B0'ın uydurduğu bir iade adımını ve agent'ın P5'teki yanlış kargo kuralını. Bu yüzden sadakat sayıları gerçeğin üst sınırı gibi okunmalı. Uydurma için ana ölçü elle verilen etiketler.
-- B2, SQL doğrulayıcıya müşteri ve sipariş numaralarını gizleyen kural eklenmeden önce ölçüldü. Yeni bir çalıştırmada sonuç değişebilir.
+- B2 ve Ops Data Agent, SQL doğrulayıcıya müşteri ve sipariş numaralarını gizleyen kural eklendikten sonra yeniden ölçüldü. Doğruluk değişmedi, çünkü golden set'teki ops soruları bu kolonları istemiyor.
 
 **Ops Data Agent** (8 ops sorusu, elle yazılmış golden SQL ile karşılaştırma). B2: aynı döngü, ama sadece `run_sql` ve ham tablo şeması.
 
@@ -189,8 +189,8 @@ Golden set'teki sorular üzerinden, görev başına. Maliyet ücretli katmanın 
 |---|---|---|---|---|---|
 | B0 | 28 | 0,0 | 1,07 | 1,2 | 8,1 |
 | Support Agent | 28 | 1,3 | 1,47 | 20,5 | 91,9 |
-| B2 | 9 | 1,0 | 1,12 | 15,7 | 28,9 |
-| Ops Data Agent | 9 | 1,8 | 2,13 | 28,2 | 45,3 |
+| B2 | 9 | 1,0 | 1,15 | 17,0 | 26,0 |
+| Ops Data Agent | 9 | 1,9 | 2,22 | 32,9 | 52,8 |
 | Router | 43 | 0,0 | 0,09 | 0,6 | 1,6 |
 
 Ortanca süre: soruların yarısı bundan kısa sürdü. p95 süre: soruların %95'i bundan kısa sürdü; yani en yavaş birkaç soruyu gösteriyor.
