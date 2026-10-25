@@ -5,7 +5,7 @@ A support and operations agent for a marketplace: it answers customers' "where i
 
 Türkçe: [README.tr.md](README.tr.md)
 
-> Status (17 October 2026): the Support Agent and the Ops Data Agent work and are measured against baselines. The web demo is live: [shopops-demo.streamlit.app](https://shopops-demo.streamlit.app/). The order tools come from an MCP server, and a router sends each message to the right agent. The blog post comes next. Deadline: 6 November 2026.
+> Status (25 October 2026): the Support Agent and the Ops Data Agent work and are measured against baselines. The web demo is live: [shopops-demo.streamlit.app](https://shopops-demo.streamlit.app/). The order tools come from an MCP server, and a router sends each message to the right agent. Blog post about the project (in Turkish): [Medium](https://medium.com/@nisakesim64/shopops-e-ticaret-destek-ve-operasyon-i%C3%A7in-bir-ai-agent-sistemi-2bb53f1521fd). Deadline: 6 November 2026.
 
 ## Problem
 
@@ -371,8 +371,7 @@ logs/                        agent log and handover queue (not in the repository
 
 ## Roadmap
 
-- **Next:** final README, answers to the brief's written questions, publishing the blog post.
-- **Last week:** measuring B2 again with the new SQL rule, clean install test, v1.0.
+- **Next:** clean install test and v1.0.
 
 ## AI assistance
 
