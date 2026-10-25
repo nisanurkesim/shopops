@@ -244,6 +244,10 @@ Okurken dikkat:
 
 `tests/test_indirect_injection.py`, gizlenmiş talimata tamamen uyan sahte bir modelle çalışıyor: yine hiçbir şey yazılmıyor, çünkü bir talebi yalnızca müşterinin arayüzdeki cevabı onaylayabiliyor.
 
+## Proje belgesinin soruları
+
+Bootcamp'in proje belgelerinin yazılı cevap istediği 16 sorunun cevapları: [docs/written_answers.tr.md](docs/written_answers.tr.md)
+
 ## Veri
 
 - [Olist Brazilian E-Commerce Public Dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce): 2016–2018 arası yaklaşık 99 bin gerçek, anonimleştirilmiş sipariş, 9 tablo.

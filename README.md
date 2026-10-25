@@ -245,6 +245,10 @@ Read with care:
 
 `tests/test_indirect_injection.py` uses a fake model that fully obeys an injected instruction: nothing is written, because only the customer's answer in the interface can approve a request.
 
+## Questions from the brief
+
+Answers to the 16 written questions in the bootcamp's project brief: [docs/written_answers.md](docs/written_answers.md)
+
 ## Data
 
 - [Olist Brazilian E-Commerce Public Dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce): about 99k real, anonymised orders from 2016–2018, 9 tables.
