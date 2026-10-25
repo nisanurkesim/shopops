@@ -9,8 +9,11 @@ from pathlib import Path
 
 
 def answer_sha(text: str) -> str:
-    """A short fingerprint of a text (the first 12 characters of its SHA-256)."""
-    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()[:12]
+    """A short fingerprint of a text (the first 12 characters of its SHA-256).
+    Line endings are made LF first: Git for Windows can check the result files out with
+    CRLF, and the same answer must get the same fingerprint on every machine."""
+    text = (text or "").replace("\r\n", "\n")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
 
 
 def apply_labels(path: Path, labels: dict[str, str], answers: dict[str, str],

@@ -160,6 +160,20 @@ def log_section(events: list[dict]) -> list[str]:
     return lines
 
 
+LOG_HEADING = "## Per step, from the agent log"
+
+
+def kept_log_section() -> list[str]:
+    """The log is not in the repository. Without it, keep the log section of the saved report,
+    so a fresh clone does not replace the measured numbers with an empty section."""
+    if OUT_PATH.exists():
+        text = OUT_PATH.read_text(encoding="utf-8").replace("\r\n", "\n")
+        if LOG_HEADING in text:
+            print("No agent log found: the log section of the saved report is kept.")
+            return text.split(LOG_HEADING, 1)[1].strip("\n").split("\n")
+    return log_section([])
+
+
 def main():
     lines = ["# Steps, tokens, cost and time", "",
              f"Model `{GEMINI_MODEL}`. Cost is what the tokens would cost on the paid tier: "
@@ -171,8 +185,9 @@ def main():
              "times include retries after a busy or failed call. These files do not have thinking tokens, "
              "so their cost leaves thinking out; the log below has it.", ""]
     lines += task_table()
-    lines += ["", "## Per step, from the agent log", ""]
-    lines += log_section(read_log())
+    lines += ["", LOG_HEADING, ""]
+    rows = read_log()
+    lines += log_section(rows) if rows else kept_log_section()
     OUT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
     print(f"\nWrote {OUT_PATH}")

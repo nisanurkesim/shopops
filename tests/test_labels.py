@@ -30,6 +30,10 @@ class ApplyLabelsTest(unittest.TestCase):
             saved = list(csv.DictReader(f))
         self.assertEqual(saved[1]["hallucinated"], "")   # the old label was not kept either
 
+    def test_line_endings_do_not_change_the_fingerprint(self):
+        # a fresh clone on Windows can have CRLF line endings in the result files
+        self.assertEqual(answer_sha("Satir 1\r\nSatir 2"), answer_sha("Satir 1\nSatir 2"))
+
     def test_the_committed_labels_match_the_committed_answers(self):
         from eval import label_agent, label_b1, label_baseline
         for module in (label_baseline, label_b1, label_agent):
