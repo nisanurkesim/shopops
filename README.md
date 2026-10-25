@@ -276,6 +276,10 @@ python scripts/smoke.py          # check row counts and basic rules
 python scripts/build_index.py    # build the policy search index (downloads the embedding model once)
 ```
 
+On Windows, if `python` is not found (Python was installed without adding it to PATH), use `py -3.14 -m venv .venv` for the first line; once the environment is active, `python` works.
+
+`build_index.py` rebuilds the index. The repository already has a built index, so afterwards `git status` shows `data/chroma` as changed; this is expected.
+
 Copy `.env.example` to `.env` and add your own Gemini API key (free tier, [Google AI Studio](https://aistudio.google.com)).
 
 Run the tests (no API key needed; the model is replaced by a fake):

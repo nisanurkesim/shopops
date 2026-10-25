@@ -275,6 +275,10 @@ python scripts/smoke.py          # satır sayılarını ve temel kuralları kont
 python scripts/build_index.py    # politika arama indeksini oluştur (embedding modeli bir kez indirilir)
 ```
 
+Windows'ta `python` komutu bulunamazsa (Python PATH'e eklenmeden kurulduysa) ilk satır yerine `py -3.14 -m venv .venv` kullan; ortam aktif olunca `python` komutu çalışır.
+
+`build_index.py` indeksi yeniden kurar. Repoda hazır bir indeks olduğu için sonrasında `git status` içinde `data/chroma` değişmiş görünür; bu normaldir.
+
 `.env.example` dosyasını `.env` olarak kopyala ve kendi Gemini API anahtarını ekle (ücretsiz katman, [Google AI Studio](https://aistudio.google.com)).
 
 Testleri çalıştırmak için (API anahtarı gerekmez; model sahte bir modelle değiştiriliyor):
