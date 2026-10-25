@@ -49,7 +49,7 @@ Used later for the README and the blog post. "Result" lines refer to the eval ru
 - What happened: in the CLI demo the approval question got an empty answer, so the request was not created (as designed). The customer then sent the same request again. The agent called no tool and said "please confirm the request on the screen", but there was no summary on screen anymore. Typing "e" into the chat did nothing, because approval only comes from the approval prompt.
 - Cause: the interface note after a decline only says that nothing was created. The model sees from the history that it already prepared a request and does not prepare a new one.
 - Fix: the note after a decline says that the summary is no longer on screen and that `create_return_request` must be called again if the customer still wants the return.
-- Result: covered by a unit test (`tests/test_tool_texts.py`). The golden set has one question per case, so the eval run does not reach this situation. To check again in the next CLI or Streamlit demo.
+- Result: covered by a unit test (`tests/test_tool_texts.py`). The golden set has one question per case, so the eval run does not reach this situation. Checked in the Streamlit demo on 2026-10-25: after "Vazgeç" (decline) the same request was sent again; the agent prepared the request again and a new summary appeared. It was declined again, so nothing was written.
 - Good side: a "yes" typed into the chat cannot approve anything (G1).
 
 ## 8. Long turns with normal token counts
