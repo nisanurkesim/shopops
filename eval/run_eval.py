@@ -227,8 +227,8 @@ def build_table(folder: Path = RESULTS, golden_path: Path = GOLDEN_PATH) -> list
         "- B0 and B1 make few false claims because they mostly repeat the policy text, but they cannot say "
         "what an order needs. That shows in task success (they make no decision) and in helpfulness, not in "
         "the made-up facts column.",
-        "- B2 was measured before the SQL validator started to refuse customer, order and review ids in the "
-        "result (18 Oct 2026); a new B2 run could differ.",
+        "- B2 was run again on 2026-10-22, after the SQL validator started to refuse customer, order and "
+        "review ids in the result; it still matched 1 of 8.",
     ]
 
 

@@ -374,7 +374,7 @@ logs/                        agent log'u ve temsilci kuyruğu (repoda yok)
 
 ## Yol haritası
 
-- **Sırada:** temiz kurulum testi ve v1.0.
+- **Tamamlandı:** temiz kurulum testi ve `v1.0` tag'i (25 Ekim 2026).
 
 ## Yapay zekâ desteği
 

@@ -27,4 +27,4 @@ Built by `python eval/run_eval.py` on 2026-10-22 from the files in `eval/results
 - The sets are small and every question was run once: one question moves a customer group by 4-17 points and the ops result by 12 points.
 - The judge is the same model as the systems it scores. In the manual check it missed claims the policies do not support (B0's made-up 'Siparislerim page' step, the agent's freight rule in P5), so its faithfulness numbers are an upper bound. The manual labels are the main measure of made-up facts.
 - B0 and B1 make few false claims because they mostly repeat the policy text, but they cannot say what an order needs. That shows in task success (they make no decision) and in helpfulness, not in the made-up facts column.
-- B2 was measured before the SQL validator started to refuse customer, order and review ids in the result (18 Oct 2026); a new B2 run could differ.
+- B2 was run again on 2026-10-22, after the SQL validator started to refuse customer, order and review ids in the result; it still matched 1 of 8.

@@ -375,7 +375,7 @@ logs/                        agent log and handover queue (not in the repository
 
 ## Roadmap
 
-- **Next:** clean install test and v1.0.
+- **Done:** clean install test and the `v1.0` tag (25 October 2026).
 
 ## AI assistance
 
