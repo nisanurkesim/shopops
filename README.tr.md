@@ -4,7 +4,7 @@ Bir pazaryeri için destek ve operasyon agent'ı: müşterilerin "siparişim ner
 
 > Bu dosya [İngilizce README](README.md)'nin Türkçe çevirisidir. İngilizce sürüm esastır, bu dosya her sprint sonunda güncellenir.
 
-> Durum (30 Ekim 2026): Support Agent ve Ops Data Agent çalışıyor ve baseline'larla karşılaştırılarak ölçüldü. Web demosu yayında: [shopops-demo.streamlit.app](https://shopops-demo.streamlit.app/). Sipariş tool'ları bir MCP server'dan geliyor, mesajları bir router doğru agent'a gönderiyor. Proje hakkındaki blog yazısı: [Medium](https://medium.com/@nisakesim64/shopops-e-ticaret-destek-ve-operasyon-i%C3%A7in-bir-ai-agent-sistemi-2bb53f1521fd). Demo videosu (1:24, yapay zekâ seslendirmesi): [YouTube](https://youtu.be/MgxPlWBEE-w). Teslim tarihi: 6 Kasım 2026.
+> Web demosu: [shopops-demo.streamlit.app](https://shopops-demo.streamlit.app/) · Demo videosu (1:24, yapay zekâ seslendirmesi): [YouTube](https://youtu.be/MgxPlWBEE-w) · Proje hakkındaki blog yazısı: [Medium](https://medium.com/@nisakesim64/shopops-e-ticaret-destek-ve-operasyon-i%C3%A7in-bir-ai-agent-sistemi-2bb53f1521fd)
 
 ## Problem
 
