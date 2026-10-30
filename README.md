@@ -9,7 +9,7 @@ Türkçe: [README.tr.md](README.tr.md)
 
 ## Problem
 
-Örnekpazar is a fictional marketplace with many sellers. We use the public Olist dataset as its order history (2016–2018).
+Örnekpazar ("example market" in Turkish) is a fictional marketplace with many sellers. We use the public Olist dataset as its order history (2016–2018).
 
 Three people have a problem today:
 
