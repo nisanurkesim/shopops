@@ -1,0 +1,38 @@
+# Runs the unit tests on every push to main and on pull requests.
+# No API key and no Olist data here: the tests build small databases of their own
+# and never call the model. The two tests that need the real database are skipped.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      # The policy search tests download the embedding model (ONNX) from Hugging Face.
+      # Keep it between runs; a new copy is downloaded only when policies.py changes.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface
+          key: hf-e5-small-${{ hashFiles('src/knowledge/policies.py') }}
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Unit tests
+        run: python -m unittest discover tests -v
